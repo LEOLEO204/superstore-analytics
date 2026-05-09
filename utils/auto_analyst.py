@@ -81,7 +81,10 @@ def generate_cached_ai_report(metadata_str):
     Gọi LLM Llama-3.3-70b để tạo báo cáo chẩn đoán và nhận định dữ liệu tự động dựa trên metadata chuỗi.
     """
     load_dotenv(override=True)
-    api_key = os.environ.get("GROQ_API_KEY")
+    try:
+        api_key = st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY"))
+    except Exception:
+        api_key = os.environ.get("GROQ_API_KEY")
     
     if not api_key or api_key == "your_google_api_key_here":
         return "⚠️ Không tìm thấy API Key hoặc API Key không hợp lệ. Vui lòng kiểm tra lại file `.env`."

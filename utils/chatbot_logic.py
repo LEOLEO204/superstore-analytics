@@ -11,7 +11,10 @@ from utils.i18n import t
 @st.cache_resource
 def get_ai_agent(df, rfm_df):
     load_dotenv(override=True)
-    api_key = os.environ.get("GROQ_API_KEY")
+    try:
+        api_key = st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY"))
+    except Exception:
+        api_key = os.environ.get("GROQ_API_KEY")
     
     if not api_key or api_key == "your_google_api_key_here":
         return None
