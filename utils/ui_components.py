@@ -284,11 +284,12 @@ def check_authentication(page_name="Trang Chủ"):
         with col2:
             with st.form("login_form", clear_on_submit=False):
                 st.markdown("<h3 style='text-align: center; margin-bottom: 15px;'>🔑 Hệ Thống Đăng Nhập</h3>", unsafe_allow_html=True)
-                username = st.text_input("Tên đăng nhập (Username)", value="admin")
-                password = st.text_input("Mật khẩu (Password)", type="password", value="admin123")
+                username = st.text_input("Tên đăng nhập (Username)", value="")
+                password = st.text_input("Mật khẩu (Password)", type="password", value="")
                 submit = st.form_submit_button("🔑 XÁC THỰC DANH TÍNH", use_container_width=True)
                 
                 if submit:
+                    # BẠN CÓ THỂ ĐỔI TÀI KHOẢN & MẬT KHẨU Ở ĐÂY:
                     if username == "admin" and password == "admin123":
                         st.session_state.authenticated = True
                         st.session_state.username = username
