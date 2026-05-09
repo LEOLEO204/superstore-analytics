@@ -243,15 +243,35 @@ def log_activity(username, page_name):
     except Exception:
         pass
 
+ENABLE_AUTHENTICATION = True # Đổi thành False nếu bạn muốn TẮT HOÀN TOÀN trang đăng nhập bảo mật
+
 def check_authentication(page_name="Trang Chủ"):
     """
     Xác thực người dùng bảo mật cao (Authentication Form) và ghi nhận hoạt động (Logging).
     Áp dụng cho cả trang chủ và toàn bộ trang con.
     """
+    if not ENABLE_AUTHENTICATION:
+        return
+        
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
         
     if not st.session_state.authenticated:
+        # Ẩn hoàn toàn thanh bên (Sidebar) trước khi đăng nhập để tạo màn hình full-screen bảo mật cực kỳ đẹp mắt
+        st.markdown("""
+        <style>
+            [data-testid="stSidebar"] {
+                display: none !important;
+            }
+            [data-testid="stSidebarCollapseButton"] {
+                display: none !important;
+            }
+            .stAppHeader {
+                display: none !important;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+        
         # Form Đăng Nhập Glassmorphism tuyệt vời
         st.markdown("""
         <div style="text-align: center; margin-top: 50px; margin-bottom: 20px;">
