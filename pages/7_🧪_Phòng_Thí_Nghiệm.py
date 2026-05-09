@@ -9,6 +9,8 @@ from utils.ui_components import inject_custom_css, render_top_bar, render_page_h
 from utils.i18n import t
 
 st.set_page_config(page_title="Phòng Thí Nghiệm", page_icon="🧪", layout="wide")
+from utils.ui_components import check_authentication
+check_authentication("Phòng Thí Nghiệm")
 inject_custom_css()
 render_top_bar()
 

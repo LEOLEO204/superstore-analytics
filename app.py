@@ -9,6 +9,9 @@ from utils.i18n import t
 
 st.set_page_config(page_title="Superstore Analytics", page_icon="📈", layout="wide")
 
+from utils.ui_components import check_authentication
+check_authentication("Trang Chủ")
+
 inject_custom_css()
 render_top_bar()
 

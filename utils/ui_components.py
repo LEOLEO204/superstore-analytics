@@ -219,3 +219,67 @@ def render_page_header(title, subtitle, icon="", color_preset="blue"):
     </div>
     """
     st.markdown(header_html, unsafe_allow_html=True)
+
+def log_activity(username, page_name):
+    """
+    Ghi nhận lịch sử hoạt động tác nghiệp của người dùng (Logging).
+    """
+    import datetime
+    import csv
+    import os
+    try:
+        os.makedirs("data", exist_ok=True)
+        log_file = "data/access_logs.csv"
+        file_exists = os.path.exists(log_file)
+        with open(log_file, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["Timestamp", "Username", "Page"])
+            writer.writerow([
+                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                username,
+                page_name
+            ])
+    except Exception:
+        pass
+
+def check_authentication(page_name="Trang Chủ"):
+    """
+    Xác thực người dùng bảo mật cao (Authentication Form) và ghi nhận hoạt động (Logging).
+    Áp dụng cho cả trang chủ và toàn bộ trang con.
+    """
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+        
+    if not st.session_state.authenticated:
+        # Form Đăng Nhập Glassmorphism tuyệt vời
+        st.markdown("""
+        <div style="text-align: center; margin-top: 50px; margin-bottom: 20px;">
+            <h1 style="font-size: 2.8rem !important; font-weight: 800; background: -webkit-linear-gradient(45deg, #ff4b4b, #8e24aa); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">🔒 SUPERSTORE ANALYTICS</h1>
+            <p style="color: gray; font-size: 1.1rem;">Cổng thông tin phân tích kinh doanh nội bộ chuyên nghiệp. Vui lòng đăng nhập để tiếp tục.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 1.5, 1])
+        with col2:
+            with st.form("login_form", clear_on_submit=False):
+                st.markdown("<h3 style='text-align: center; margin-bottom: 15px;'>🔑 Hệ Thống Đăng Nhập</h3>", unsafe_allow_html=True)
+                username = st.text_input("Tên đăng nhập (Username)", value="admin")
+                password = st.text_input("Mật khẩu (Password)", type="password", value="admin123")
+                submit = st.form_submit_button("🔑 XÁC THỰC DANH TÍNH", use_container_width=True)
+                
+                if submit:
+                    if username == "admin" and password == "admin123":
+                        st.session_state.authenticated = True
+                        st.session_state.username = username
+                        log_activity(username, "Đăng nhập thành công")
+                        st.success("Xác thực thành công! Đang chuyển hướng...")
+                        st.rerun()
+                    else:
+                        st.error("Sai tên đăng nhập hoặc mật khẩu! Vui lòng thử lại.")
+        
+        # Thêm nút thoát chương trình để chặn truy cập
+        st.stop()
+    else:
+        # Nếu đã đăng nhập, ghi log hoạt động xem trang hiện tại
+        log_activity(st.session_state.get("username", "admin"), page_name)

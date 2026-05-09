@@ -13,6 +13,8 @@ from utils.ui_components import inject_custom_css, render_top_bar, render_page_h
 from utils.i18n import t
 
 st.set_page_config(page_title="Phân tích Kinh doanh", layout="wide")
+from utils.ui_components import check_authentication
+check_authentication("Hiệu Suất Kinh Doanh")
 inject_custom_css()
 render_top_bar()
 
@@ -82,6 +84,96 @@ with col2:
                      title=t('revenue_by_market'),
                      barmode='group')
     st.plotly_chart(fig_bar, use_container_width=True)
+
+# --- Pareto & Profit Margin Analysis Section ---
+st.divider()
+st.subheader("💡 Phân Tích Pareto (80/20) & Biên Lợi Nhuận (Profit Margin)")
+
+with st.expander("📖 Hướng dẫn Phân tích Pareto 80/20 & Biên Lợi Nhuận:"):
+    st.markdown("""
+    **1. Quy luật Pareto (80/20 Rule):**
+    - Cho biết **20% khách hàng hàng đầu** đóng góp tới **80% doanh thu** của toàn doanh nghiệp. 
+    - Giúp bộ phận Marketing và Chăm sóc Khách hàng tập trung nguồn lực tối ưu vào nhóm khách hàng mang lại giá trị cao nhất thay vì dàn trải chi phí.
+    
+    **2. Biên Lợi Nhuận (%) (Profit Margin):**
+    - `Biên Lợi Nhuận (%) = (Tổng Lợi nhuận / Tổng Doanh số) * 100`.
+    - Một vùng có Doanh số lớn chưa chắc đã hiệu quả nếu Biên Lợi Nhuận thấp do chi phí vận hành quá cao. Chúng tôi sử dụng sắc tím hoàng gia để đại diện cho dòng Lợi Nhuận bền vững của doanh nghiệp.
+    """)
+
+p_col1, p_col2 = st.columns(2)
+
+with p_col1:
+    try:
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+        
+        # Tính toán Pareto theo Khách hàng
+        pareto_df = df_filtered.groupby('Customer Name')['Sales'].sum().sort_values(ascending=False).reset_index()
+        pareto_df['Cum_Sales'] = pareto_df['Sales'].cumsum()
+        tot_sales = pareto_df['Sales'].sum()
+        pareto_df['Cum_Percentage'] = (pareto_df['Cum_Sales'] / tot_sales) * 100
+        
+        top_30_pareto = pareto_df.head(30)
+        
+        fig_pareto = make_subplots(specs=[[{"secondary_y": True}]])
+        fig_pareto.add_trace(
+            go.Bar(
+                x=top_30_pareto['Customer Name'], 
+                y=top_30_pareto['Sales'], 
+                name="Doanh số cá nhân", 
+                marker_color="#1f77b4" # Blue for Revenue
+            ),
+            secondary_y=False
+        )
+        fig_pareto.add_trace(
+            go.Scatter(
+                x=top_30_pareto['Customer Name'], 
+                y=top_30_pareto['Cum_Percentage'], 
+                name="Tỷ lệ lũy kế (%)", 
+                line=dict(color="#9467bd", width=3), # Purple for Cumulative Pareto Line
+                mode="lines+markers"
+            ),
+            secondary_y=True
+        )
+        
+        fig_pareto.update_layout(
+            title="Biểu đồ Pareto 80/20 theo Khách Hàng (Top 30)",
+            xaxis_tickangle=-45,
+            height=450,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        fig_pareto.update_yaxes(title_text="Doanh số ($)", secondary_y=False)
+        fig_pareto.update_yaxes(title_text="Tỷ lệ tích lũy (%)", secondary_y=True)
+        
+        st.plotly_chart(fig_pareto, use_container_width=True)
+    except Exception as e:
+        st.error(f"Lỗi tính toán Pareto: {e}")
+
+with p_col2:
+    try:
+        # Tính biên lợi nhuận theo Region
+        margin_df = df_filtered.groupby('Region').agg(
+            Total_Sales=('Sales', 'sum'),
+            Total_Profit=('Profit', 'sum')
+        ).reset_index()
+        margin_df['Profit_Margin'] = (margin_df['Total_Profit'] / margin_df['Total_Sales']) * 100
+        margin_df = margin_df.sort_values(by='Profit_Margin', ascending=True) # Ascending for nice horizontal bar
+        
+        fig_margin = px.bar(
+            margin_df,
+            y='Region',
+            x='Profit_Margin',
+            orientation='h',
+            title='Biên Lợi Nhuận (%) Theo Khu Vực',
+            labels={'Profit_Margin': 'Biên Lợi Nhuận (%)', 'Region': 'Khu vực'},
+            color='Profit_Margin',
+            color_continuous_scale='Purples' # Purple for Profit Consistency
+        )
+        
+        fig_margin.update_layout(height=450)
+        st.plotly_chart(fig_margin, use_container_width=True)
+    except Exception as e:
+        st.error(f"Lỗi tính toán Biên lợi nhuận: {e}")
 
 # --- Interactive Data Drill-down Section ---
 st.divider()

@@ -7,6 +7,8 @@ from utils.ui_components import inject_custom_css, render_top_bar, render_page_h
 from utils.i18n import t
 
 st.set_page_config(page_title="Phân tích Khách hàng", layout="wide")
+from utils.ui_components import check_authentication
+check_authentication("Chân Dung Khách Hàng")
 inject_custom_css()
 render_top_bar()
 
@@ -78,6 +80,80 @@ st.markdown(t('high_risk_desc'))
 high_risk_customers = filtered_rfm[filtered_rfm['Churn_Risk'] == 'Nguy cơ cao (High Risk)']
 high_risk_display = high_risk_customers[['Customer ID', 'Customer Name', 'Segment', 'Recency', 'Frequency', 'Monetary']].sort_values(by='Monetary', ascending=False)
 st.dataframe(high_risk_display, use_container_width=True)
+
+# Nút tải xuống dữ liệu Khách hàng nguy cơ cao
+csv_high_risk = high_risk_display.to_csv(index=False).encode('utf-8')
+st.download_button(
+    label="📥 Tải danh sách khách hàng nguy cơ cao (CSV)",
+    data=csv_high_risk,
+    file_name='high_risk_customers.csv',
+    mime='text/csv',
+    key='download_high_risk'
+)
+
+st.divider()
+
+# 3. Phân tích Cohort & Tỷ lệ giữ chân khách hàng (Cohort Analysis)
+st.subheader("📊 Phân Tích Cohort & Tỷ Lệ Giữ Chân (Cohort Retention Analysis)")
+
+with st.expander("📖 Hướng dẫn phân tích Cohort là gì?"):
+    st.markdown("""
+    **Cohort Analysis (Phân tích Cohort)** là một kỹ thuật phân tích sâu trong Khoa học Dữ liệu, giúp chia khách hàng thành từng nhóm (Cohort) dựa trên thời điểm họ thực hiện giao dịch đầu tiên. 
+    - **Trục Tung (Y - Cohort Month):** Biểu thị tháng khách hàng bắt đầu mua hàng lần đầu tiên.
+    - **Trục Hoành (X - Cohort Index):** Biểu thị số tháng sau lần mua đầu tiên (Tháng 0 là tháng mua đầu, Tháng 1 là tháng tiếp theo...).
+    - **Tỷ lệ giữ chân (Retention Rate %):** Tỷ lệ phần trăm khách hàng quay lại mua sắm. Màu sắc càng đậm nghĩa là tỷ lệ giữ chân khách hàng càng cao, chứng tỏ hoạt động chăm sóc khách hàng và chất lượng sản phẩm rất tốt.
+    """)
+
+try:
+    from utils.data_processor import detect_standard_columns
+    col_map = detect_standard_columns(df)
+    cust_col = col_map['Customer ID']
+    date_col = col_map['Order Date']
+    
+    if cust_col and date_col and cust_col in df.columns and date_col in df.columns:
+        # Chuẩn bị dữ liệu Cohort
+        cohort_df = df[[cust_col, date_col]].copy()
+        cohort_df['Order Month'] = cohort_df[date_col].dt.to_period('M')
+        
+        # Tìm tháng đầu tiên mua hàng của mỗi khách hàng
+        cohort_df['Cohort Month'] = cohort_df.groupby(cust_col)[date_col].transform('min').dt.to_period('M')
+        
+        # Group dữ liệu tính số lượng khách hàng độc nhất
+        cohort_group = cohort_df.groupby(['Cohort Month', 'Order Month']).agg(n_customers=(cust_col, 'nunique')).reset_index()
+        
+        # Tính Cohort Index (Tháng hoạt động thứ n)
+        cohort_group['Cohort Index'] = (cohort_group['Order Month'] - cohort_group['Cohort Month']).apply(lambda x: x.n)
+        
+        # Pivot dữ liệu thành dạng bảng rộng
+        cohort_pivot = cohort_group.pivot(index='Cohort Month', columns='Cohort Index', values='n_customers')
+        
+        # Tính tỷ lệ giữ chân (%)
+        cohort_size = cohort_pivot.iloc[:, 0]
+        retention = cohort_pivot.divide(cohort_size, axis=0) * 100
+        
+        # Định dạng index và cột hiển thị
+        retention.index = retention.index.astype(str)
+        
+        # Vẽ Heatmap sử dụng Plotly
+        fig_cohort = px.imshow(
+            retention,
+            text_auto=".1f",
+            color_continuous_scale='Blues',
+            labels=dict(x="Tháng hoạt động (Cohort Index)", y="Nhóm Khách Hàng (Cohort Month)", color="Tỷ lệ giữ chân (%)"),
+            title="Bản đồ nhiệt giữ chân khách hàng lũy kế (%)"
+        )
+        
+        fig_cohort.update_layout(
+            xaxis=dict(tickmode='linear', tick0=0, dtick=1),
+            yaxis=dict(type='category'),
+            height=500
+        )
+        
+        st.plotly_chart(fig_cohort, use_container_width=True)
+    else:
+        st.info("Dataset hiện tại không có đủ thông tin Customer ID và Order Date để thực hiện phân tích Cohort.")
+except Exception as e:
+    st.error(f"Lỗi khi tính toán Cohort: {e}")
 
 # Inject Floating Chat
 render_floating_chat(df, rfm_df)

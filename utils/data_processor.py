@@ -3,6 +3,8 @@ import numpy as np
 import datetime
 import os
 import sqlite3
+import streamlit as st
+
 
 DB_PATH = 'data/superstore.db'
 
@@ -21,7 +23,7 @@ def get_active_dataset_path():
     return 'data/superstore (1).csv'
 
 def get_db_connection():
-    return sqlite3.connect(DB_PATH)
+    return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
 
 def initialize_database():
     """
@@ -71,6 +73,7 @@ def initialize_database():
     finally:
         conn.close()
 
+@st.cache_data(show_spinner=False)
 def load_and_clean_data(file_path=None):
     initialize_database()
     
