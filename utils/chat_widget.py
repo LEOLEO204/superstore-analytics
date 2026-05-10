@@ -262,11 +262,33 @@ def render_floating_chat(df, rfm_df):
                     4. Nếu là câu hỏi tiếp nối, hãy liên kết chặt chẽ ngữ cảnh trước đó để trả lời đúng trọng tâm.
                     """
                     res = ask_agent(agent, full_prompt)
+                    st.session_state.chat_history.append({"role": "ai", "content": res})
                 else:
-                    res = t("api_key_error")
+                    # NẾU THIẾU KEY: HIỂN THỊ FORM CẤU HÌNH NGAY TRONG CHAT ĐỂ FIX LỖI
+                    st.session_state.chat_history.append({
+                        "role": "ai", 
+                        "content": "⚠️ Chưa tìm thấy API Key. Vui lòng nhập Groq API Key bên dưới thanh chat để kích hoạt ngay."
+                    })
+                    st.session_state.show_key_fixer = True
                     
-                st.session_state.chat_history.append({"role": "ai", "content": res})
                 st.session_state.is_thinking = False
                 st.rerun()
+
+            # TỰ ĐỘNG HIỂN THỊ Ô NHẬP KEY NẾU CHƯA CÓ
+            if not st.session_state.get("USER_GROQ_KEY"):
+                from utils.chatbot_logic import get_ai_agent
+                if get_ai_agent(df, rfm_df) is None:
+                    with st.expander("🔑 CẤU HÌNH KHẨN CẤP: NHẬP API KEY", expanded=True):
+                        input_key = st.text_input("Dán API Key của bạn vào đây:", type="password", key="runtime_key_box")
+                        if st.button("✅ LƯU & KÍCH HOẠT AI", use_container_width=True):
+                            if input_key.strip():
+                                st.session_state.USER_GROQ_KEY = input_key.strip()
+                                st.success("Đã nhận Key! Hãy thử hỏi lại nhé.")
+                                # Làm sạch cache resource để buộc khởi tạo lại Agent mới
+                                from utils.chatbot_logic import get_ai_agent
+                                get_ai_agent.clear()
+                                st.rerun()
+                            else:
+                                st.error("Vui lòng không bỏ trống.")
                 
             st.markdown(f'<div class="chat-footer">{t("ai_disclaimer")}</div>', unsafe_allow_html=True)

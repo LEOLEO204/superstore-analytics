@@ -12,7 +12,10 @@ from utils.i18n import t
 def get_ai_agent(df, rfm_df):
     load_dotenv(override=True)
     try:
-        api_key = st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY"))
+        # Thứ tự ưu tiên: SessionState UI -> Streamlit Secrets -> Biến môi trường .env
+        api_key = st.session_state.get("USER_GROQ_KEY")
+        if not api_key:
+            api_key = st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY"))
     except Exception:
         api_key = os.environ.get("GROQ_API_KEY")
     

@@ -89,7 +89,19 @@ if agent:
             except Exception as e:
                 st.error(f"{t('ai_error')} {e}")
 else:
-    st.warning(t('missing_api_key'))
+    st.warning("⚠️ Không thể khởi tạo Trợ lý AI do thiếu cấu hình API Key.")
+    st.info("💡 Giải pháp nhanh: Bạn có thể dán Groq API Key vào ô dưới đây để kích hoạt sử dụng ngay lập tức trên giao diện này.")
+    
+    with st.container(border=True):
+        input_key_main = st.text_input("🔑 Nhập Groq API Key:", type="password", key="main_api_key_box")
+        if st.button("🚀 KÍCH HOẠT NGAY", use_container_width=True):
+            if input_key_main.strip():
+                st.session_state.USER_GROQ_KEY = input_key_main.strip()
+                get_ai_agent.clear() # Xóa cache cũ
+                st.success("🎉 Kích hoạt thành công! Đang tải lại...")
+                st.rerun()
+            else:
+                st.error("Vui lòng điền đầy đủ khóa API.")
 
 # Kích hoạt Floating Chat trên trang này
 render_floating_chat(df, rfm_df)
