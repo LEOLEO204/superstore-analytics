@@ -97,6 +97,44 @@ if uploaded_lab_file is not None:
             if unnamed_empty:
                 df_lab = df_lab.drop(columns=unnamed_empty)
                 
+            st.sidebar.markdown("🧹 **Công cụ dọn dẹp nhanh:**")
+            enable_ffill = st.sidebar.checkbox("Điền đầy dòng trống (Forward Fill)", value=False, help="Hữu ích cho dữ liệu bị gộp ô ngày tháng.")
+            if enable_ffill:
+                df_lab = df_lab.ffill()
+
+            enable_clean_currency = st.sidebar.checkbox("Làm sạch Tiền tệ (Số + Đ, $...)", value=False, help="Tự động xóa các chữ đ, $, dấu chấm thừa để đưa về số chuẩn.")
+            if enable_clean_currency:
+                def clean_numeric(val):
+                    if pd.isna(val): return val
+                    val_str = str(val).lower()
+                    # Xóa các ký tự đặc biệt tiền tệ
+                    for char in ['đ', '$', 'vnd', 'usd', '€']:
+                        val_str = val_str.replace(char, '')
+                    val_str = val_str.strip()
+                    # Xử lý chuẩn Việt Nam: dấu chấm là phân tách hàng nghìn (ví dụ 58.000 đ -> 58000)
+                    if '.' in val_str and ',' not in val_str:
+                        # Giả định trường hợp 58.000 -> 58000
+                        parts = val_str.split('.')
+                        if len(parts[-1]) == 3:
+                             val_str = val_str.replace('.', '')
+                    # Xử lý dấu phẩy (ví dụ 2,768,000)
+                    val_str = val_str.replace(',', '')
+                    
+                    try:
+                        return float(val_str)
+                    except Exception:
+                        return val
+                
+                # Quét và thử convert các cột object có chứa chữ số
+                for col in df_lab.columns:
+                    if df_lab[col].dtype == 'object':
+                        try:
+                            # Chỉ xử lý nếu có ít nhất 1 ô chứa chữ số
+                            if df_lab[col].dropna().astype(str).str.contains(r'\d', regex=True).any():
+                                df_lab[col] = df_lab[col].apply(clean_numeric)
+                        except Exception:
+                            pass
+
             st.session_state['lab_df'] = df_lab
             st.sidebar.success(f"✅ Đã nạp ({enc})!")
     except Exception as ex:
@@ -125,7 +163,8 @@ if 'lab_df' in st.session_state:
         </div>
         """, unsafe_allow_html=True)
     with col3:
-        missing_count = df.isnull().sum().sum()
+        # Đảm bảo kiểm tra an toàn nếu shape = (0, 0)
+        missing_count = df.isnull().sum().sum() if not df.empty else 0
         st.markdown(f"""
         <div class="stat-box" style="border-left-color: #E53935;">
             <div class="stat-label">Tổng ô khuyết thiếu (NaN)</div>
