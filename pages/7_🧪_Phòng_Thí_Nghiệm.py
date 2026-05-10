@@ -52,7 +52,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-render_page_header("Phòng Thí Nghiệm", "Phân tích tập dữ liệu tải lên độc lập bằng Trí Tuệ Nhân Tạo & Thống Kê Học nâng cao", "🧪", "dark")
+render_page_header("Phòng Thí Nghiệm 📊 Phân Tích Marketing", "Nền tảng phân tích chuyên biệt các chỉ số chiến dịch, tối ưu hóa hiệu suất Quảng cáo & ROAS", "🎯", "blue")
 
 # Quản lý file tải lên riêng biệt trên trang này
 st.sidebar.markdown("### 📁 Nạp dữ liệu Lab")
@@ -184,97 +184,161 @@ if 'lab_df' in st.session_state:
     with st.expander("🔍 Xem bảng dữ liệu thô (Raw Data Preview)", expanded=False):
         st.dataframe(df.head(100), use_container_width=True)
         
-    # 2. Nhận diện cột động và tính các KPI tài chính
+    # 2. Nhận diện cột động Marketing Domain
     st.markdown("---")
-    st.markdown("### 🛠️ Ánh Xạ Dữ Liệu Tự Động (Dynamic Mapping)")
-    
-    # Cung cấp khả năng Override thủ công cho bất kỳ Domain nào
-    auto_col_map = detect_standard_columns(df)
-    
-    with st.expander("⚙️ Tùy chỉnh cột phân tích (Nhấn để ép kiểu thủ công nếu nhận diện sai)", expanded=True):
-        st.markdown("Hệ thống đã tự động nhận diện các cột. Nếu sai, hãy chọn lại cột bạn muốn phân tích bên dưới:")
-        map_col1, map_col2, map_col3 = st.columns(3)
+    st.markdown("### 📈 Ánh Xạ Kênh Dữ Liệu Marketing (Dynamic Marketing Mapping)")
+
+    def detect_marketing_cols(dframe):
+        m_map = {'Cost': None, 'Clicks': None, 'Revenue': None, 'Conversions': None, 'Campaign': None, 'Impr': None}
+        cols = [str(c) for c in dframe.columns]
+        low_cols = [str(c).lower() for c in dframe.columns]
         
-        all_cols = list(df.columns)
-        numeric_cols = list(df.select_dtypes(include=['number']).columns)
+        pairs = [
+            ('Cost', ['cost', 'spend', 'chi phí', 'ngân sách', 'budget']),
+            ('Clicks', ['clicks', 'click', 'nhấp', 'truy cập', 'visits']),
+            ('Revenue', ['revenue', 'sales', 'doanh thu', 'giá trị', 'value']),
+            ('Conversions', ['conversions', 'leads', 'mua', 'chuyển đổi']),
+            ('Campaign', ['campaign', 'chiến dịch', 'kênh', 'channel', 'ad set']),
+            ('Impr', ['impressions', 'reach', 'hiển thị', 'tiếp cận'])
+        ]
         
-        with map_col1:
-            default_sales = auto_col_map['Sales']
-            sales_index = all_cols.index(default_sales) if default_sales in all_cols else 0
-            selected_sales_col = st.selectbox("💰 Cột Số tiền / Giá trị cần cộng tổng:", options=["--Không chọn--"] + all_cols, index=all_cols.index(default_sales)+1 if default_sales in all_cols else 0, key="map_sales")
-            
-        with map_col2:
-            default_profit = auto_col_map['Profit']
-            profit_index = all_cols.index(default_profit) if default_profit in all_cols else 0
-            selected_profit_col = st.selectbox("📈 Cột Lợi nhuận / Thứ cấp (Nếu có):", options=["--Không chọn--"] + all_cols, index=all_cols.index(default_profit)+1 if default_profit in all_cols else 0, key="map_profit")
+        for key, candidates in pairs:
+            for i, c in enumerate(low_cols):
+                if any(cand in c for cand in candidates):
+                    m_map[key] = cols[i]
+                    break
+        
+        # Fallback to any numeric columns if not found
+        num_cols = list(dframe.select_dtypes(include=['number']).columns)
+        if not m_map['Cost'] and len(num_cols) > 0: m_map['Cost'] = num_cols[0]
+        if not m_map['Clicks'] and len(num_cols) > 1: m_map['Clicks'] = num_cols[1]
+        
+        return m_map
 
-        with map_col3:
-            default_cust = auto_col_map['Customer ID']
-            selected_cust_col = st.selectbox("👤 Cột định danh (Tên, ID, Phân loại chính):", options=["--Không chọn--"] + all_cols, index=all_cols.index(default_cust)+1 if default_cust in all_cols else 0, key="map_cust")
-            
-    # Áp dụng ánh xạ đã chọn
-    sales_col = None if selected_sales_col == "--Không chọn--" else selected_sales_col
-    profit_col = None if selected_profit_col == "--Không chọn--" else selected_profit_col
-    cust_col = None if selected_cust_col == "--Không chọn--" else selected_cust_col
+    m_auto = detect_marketing_cols(df)
+    all_cols = list(df.columns)
     
-    # Cập nhật lại bản đồ cột cho các thuật toán khác phía dưới sử dụng
-    effective_col_map = {
-        'Sales': sales_col,
-        'Profit': profit_col,
-        'Customer ID': cust_col
-    }
-
-    st.markdown("### 🎯 Các Chỉ Số Nhận Diện Thực Tế")
+    with st.expander("⚙️ Cấu hình Cột Dữ liệu Marketing (Điều chỉnh mục tiêu)", expanded=True):
+        st.markdown("Để báo cáo marketing chính xác nhất, hãy kiểm tra và ánh xạ lại các chỉ số:")
+        mc1, mc2, mc3 = st.columns(3)
+        
+        with mc1:
+            sel_cost = st.selectbox("💰 Chi phí Quảng cáo (Cost/Spend):", options=["--Trống--"] + all_cols, 
+                                  index=all_cols.index(m_auto['Cost'])+1 if m_auto['Cost'] in all_cols else 0)
+            sel_impr = st.selectbox("👁️ Lượt Hiển thị (Impressions):", options=["--Trống--"] + all_cols, 
+                                  index=all_cols.index(m_auto['Impr'])+1 if m_auto['Impr'] in all_cols else 0)
+        with mc2:
+            sel_click = st.selectbox("🖱️ Lượt Nhấp (Clicks):", options=["--Trống--"] + all_cols, 
+                                   index=all_cols.index(m_auto['Clicks'])+1 if m_auto['Clicks'] in all_cols else 0)
+            sel_conv = st.selectbox("🎯 Lượt Chuyển đổi (Conversions):", options=["--Trống--"] + all_cols, 
+                                  index=all_cols.index(m_auto['Conversions'])+1 if m_auto['Conversions'] in all_cols else 0)
+        with mc3:
+            sel_rev = st.selectbox("💵 Doanh thu tạo ra (Revenue):", options=["--Trống--"] + all_cols, 
+                                 index=all_cols.index(m_auto['Revenue'])+1 if m_auto['Revenue'] in all_cols else 0)
+            sel_camp = st.selectbox("🏷️ Tên Chiến dịch/Kênh (Campaign):", options=["--Trống--"] + all_cols, 
+                                  index=all_cols.index(m_auto['Campaign'])+1 if m_auto['Campaign'] in all_cols else 0)
+            
+    # Prepare Values for Dashboard
+    c_col = None if sel_cost == "--Trống--" else sel_cost
+    i_col = None if sel_impr == "--Trống--" else sel_impr
+    cl_col = None if sel_click == "--Trống--" else sel_click
+    v_col = None if sel_conv == "--Trống--" else sel_conv
+    r_col = None if sel_rev == "--Trống--" else sel_rev
+    camp_col = None if sel_camp == "--Trống--" else sel_camp
     
-    k1, k2, k3, k4 = st.columns(4)
-    with k1:
-        if sales_col:
-            total_sales = df[sales_col].sum()
-            st.markdown(f"""
-            <div class="stat-box" style="border-left-color: #ffd400;">
-                <div class="stat-label">Tổng giá trị (cột: {sales_col})</div>
-                <div class="stat-value">${total_sales:,.1f}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info("Không phát hiện cột Doanh số/Giá trị")
-            
-    with k2:
-        if profit_col:
-            total_profit = df[profit_col].sum()
-            st.markdown(f"""
-            <div class="stat-box" style="border-left-color: #00E676;">
-                <div class="stat-label">Tổng lợi nhuận (cột: {profit_col})</div>
-                <div class="stat-value">${total_profit:,.1f}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info("Không phát hiện cột Lợi nhuận")
-            
-    with k3:
-        if sales_col and profit_col:
-            margin = (total_profit / total_sales) * 100 if total_sales > 0 else 0
-            st.markdown(f"""
-            <div class="stat-box" style="border-left-color: #00E5FF;">
-                <div class="stat-label">Tỷ suất lợi nhuận</div>
-                <div class="stat-value">{margin:.1f}%</div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info("Yêu cầu cột Doanh số & Lợi nhuận để tính tỷ suất")
-            
-    with k4:
-        if cust_col:
-            unique_entities = df[cust_col].nunique()
-            st.markdown(f"""
-            <div class="stat-box" style="border-left-color: #E040FB;">
-                <div class="stat-label">Tổng thực thể duy nhất (cột: {cust_col})</div>
-                <div class="stat-value">{unique_entities:,}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info("Không phát hiện cột ID Thực thể")
+    # Calculate Totals safely
+    total_cost = df[c_col].sum() if c_col and c_col in df.columns else 0
+    total_clicks = df[cl_col].sum() if cl_col and cl_col in df.columns else 0
+    total_impr = df[i_col].sum() if i_col and i_col in df.columns else 0
+    total_conv = df[v_col].sum() if v_col and v_col in df.columns else 0
+    total_rev = df[r_col].sum() if r_col and r_col in df.columns else 0
+    
+    st.markdown("### 📊 Bảng Chỉ Số Hiệu Suất Marketing (Marketing Scorecard)")
+    
+    # Row 1: Core Totals
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(f"""
+        <div class="stat-box" style="border-left-color: #E53935;">
+            <div class="stat-label">TỔNG CHI PHÍ (COST)</div>
+            <div class="stat-value">${total_cost:,.0f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""
+        <div class="stat-box" style="border-left-color: #1E88E5;">
+            <div class="stat-label">TỔNG CLICKS</div>
+            <div class="stat-value">{total_clicks:,.0f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"""
+        <div class="stat-box" style="border-left-color: #43A047;">
+            <div class="stat-label">DOANH THU (REVENUE)</div>
+            <div class="stat-value">${total_rev:,.0f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with c4:
+        st.markdown(f"""
+        <div class="stat-box" style="border-left-color: #8E24AA;">
+            <div class="stat-label">CHUYỂN ĐỔI (CONV)</div>
+            <div class="stat-value">{total_conv:,.0f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    # Row 2: Derived Metrics (CPC, CTR, ROAS, CPA)
+    st.markdown("<br>", unsafe_allow_html=True)
+    d1, d2, d3, d4 = st.columns(4)
+    
+    cpc = total_cost / total_clicks if total_clicks > 0 else 0
+    roas = total_rev / total_cost if total_cost > 0 else 0
+    ctr = (total_clicks / total_impr) * 100 if total_impr > 0 else 0
+    cpa = total_cost / total_conv if total_conv > 0 else 0
+    
+    with d1:
+        st.metric("CPC (Giá mỗi Click)", f"${cpc:,.2f}")
+    with d2:
+        st.metric("ROAS (Tỷ suất doanh thu)", f"{roas:,.2f}x", delta=f"{roas-1:,.2f}x" if roas > 1 else None)
+    with d3:
+        st.metric("CTR (Tỉ lệ Click)", f"{ctr:.2f}%" if i_col else "N/A")
+    with d4:
+        st.metric("CPA (Giá mỗi Chuyển đổi)", f"${cpa:,.2f}" if v_col else "N/A")
 
+    # Dynamic Marketing Charts Integration
+    if camp_col and c_col:
+        st.markdown("---")
+        st.markdown(f"### 📊 Phân tích Hiệu Quả theo Chiến Dịch (`{camp_col}`)")
+        
+        camp_agg = df.groupby(camp_col).agg(
+            Spend=(c_col, 'sum'),
+            Revenue=(r_col, 'sum') if r_col else (c_col, 'count') # Fallback if no revenue
+        ).reset_index()
+        
+        chart_col1, chart_col2 = st.columns(2)
+        with chart_col1:
+            # Spend Breakdown
+            fig_pie = px.pie(camp_agg, values='Spend', names=camp_col, title="Phân bổ Ngân sách (%)", hole=0.4, color_discrete_sequence=px.colors.qualitative.Set3)
+            st.plotly_chart(fig_pie, use_container_width=True)
+        
+        with chart_col2:
+            # Cost vs Rev compare if revenue exists
+            if r_col:
+                camp_agg['ROAS'] = camp_agg['Revenue'] / camp_agg['Spend']
+                fig_bar = px.bar(camp_agg.sort_values('ROAS', ascending=False), x=camp_col, y='ROAS', 
+                                title="Chỉ số ROAS theo Chiến Dịch (Cao hơn là tốt hơn)", color='ROAS',
+                                color_continuous_scale='Greens')
+                fig_bar.add_hline(y=1, line_dash="dash", line_color="red", annotation_text="Điểm hòa vốn ROAS=1")
+                st.plotly_chart(fig_bar, use_container_width=True)
+            else:
+                # Just bar of spend
+                fig_bar = px.bar(camp_agg.sort_values('Spend', ascending=False), x=camp_col, y='Spend', title="Tổng Chi tiêu mỗi Chiến Dịch", color='Spend')
+                st.plotly_chart(fig_bar, use_container_width=True)
+
+    # Tái sử dụng biến cũ để không làm hỏng AI report phía dưới
+    sales_col = r_col
+    profit_col = c_col # Trợ lý AI dùng cost thay cho profit mapping
+    cust_col = camp_col
+    
     # 3. Trung tâm chẩn đoán dữ liệu bằng AI Agent dành riêng cho Lab
     st.markdown("---")
     st.markdown("### 🤖 Trợ Lý AI: Trung Tâm Chẩn Đoán Dữ Liệu Tự Động")
@@ -737,9 +801,9 @@ if 'lab_df' in st.session_state:
 else:
     # --- Dataset Storage & Management Center ---
     st.markdown("""
-    <div style="background-color: #f8f9fa; padding: 25px; border-radius: 12px; border-left: 5px solid #2a5298; margin-bottom: 25px;">
-        <h4 style="margin-top: 0; color: #2a5298;">📂 Trung tâm Lưu trữ & Quản lý Tập dữ liệu Lab (Dataset Manager)</h4>
-        <p style="font-size: 0.95rem; color: #555; margin-bottom: 0;">Chào mừng bạn đến với Phòng Thí Nghiệm Phân Tích Dữ Liệu độc lập. Hệ thống phát hiện các tập dữ liệu mẫu sẵn có trong không gian lưu trữ của bạn. Hãy click chọn nhanh một tệp dữ liệu để nạp trực tiếp vào Lab hoặc sử dụng bộ tải lên ở Sidebar bên trái:</p>
+    <div style="background-color: #f8f9fa; padding: 25px; border-radius: 12px; border-left: 5px solid #1E88E5; margin-bottom: 25px;">
+        <h4 style="margin-top: 0; color: #1E88E5;">📂 Trung tâm Phân Tích Dữ Liệu Marketing (Marketing Hub)</h4>
+        <p style="font-size: 0.95rem; color: #555; margin-bottom: 0;">Chào mừng bạn đến với Trình Phân Tích Marketing chuyên biệt. Bạn có thể nạp nhanh tệp chiến dịch mẫu hoặc sử dụng bộ tải lên ở Sidebar bên trái để bắt đầu tính toán CPC, CTR và ROAS tự động:</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -782,10 +846,10 @@ else:
                 
     st.markdown("""
     <div style="text-align: center; padding: 40px 20px; color: #757575;">
-        <span style="font-size: 4rem;">🧪</span>
-        <h4 style="margin-top: 15px;">Phòng thí nghiệm Phân tích Dataset tự động</h4>
+        <span style="font-size: 4rem;">📈</span>
+        <h4 style="margin-top: 15px;">Hệ thống Phân tích Chiến Dịch Marketing Tự Động</h4>
         <p style="max-width: 600px; margin: 5px auto 0 auto; line-height: 1.6;">
-            Trang này hoạt động tách biệt hoàn toàn với bộ dữ liệu gốc Superstore. Bạn có thể tải lên bất kỳ tập dữ liệu nào thuộc bất kỳ ngành hàng nào (Nhân sự, Logistics, Bán lẻ, Y tế...) ở thanh bên để bắt đầu phân tích động độc lập!
+            Giải pháp đo lường ROAS, tối ưu hóa ngân sách quảng cáo tự động dựa trên dữ liệu thô từ Facebook Ads, Google Ads hoặc TikTok Ads của bạn!
         </p>
     </div>
     """, unsafe_allow_html=True)
