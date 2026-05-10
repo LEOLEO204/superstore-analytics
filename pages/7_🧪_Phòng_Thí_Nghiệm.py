@@ -60,17 +60,47 @@ uploaded_lab_file = st.sidebar.file_uploader("Nạp file Dataset mới (.csv)", 
 
 if uploaded_lab_file is not None:
     try:
-        # Tự động nhận diện dấu phân cách (; hoặc ,) từ file tải lên
-        sample = uploaded_lab_file.read(2048).decode('windows-1252', errors='ignore')
+        # Bổ sung tùy chọn nâng cao ngay bên dưới File Uploader
+        st.sidebar.markdown("⚙️ **Cấu hình nạp tệp:**")
+        skip_rows = st.sidebar.number_input("Bỏ qua số dòng đầu:", min_value=0, value=0)
+        
+        # Tự động nhận diện dấu phân cách
+        sample = uploaded_lab_file.read(4096).decode('utf-8', errors='ignore')
         uploaded_lab_file.seek(0)
         separator = ';' if sample.count(';') > sample.count(',') else ','
         
-        # Đọc dữ liệu tạm thời vào session_state
-        df_lab = pd.read_csv(uploaded_lab_file, sep=separator, encoding='latin1')
-        st.session_state['lab_df'] = df_lab
-        st.sidebar.success("✅ Nạp tệp dữ liệu vào Lab thành công!")
+        # Thử nhiều định dạng mã hóa khác nhau, ưu tiên utf-8-sig cho tiếng Việt Excel
+        encodings_to_try = ['utf-8-sig', 'utf-8', 'latin1', 'windows-1252', 'utf-16']
+        df_lab = None
+        
+        for enc in encodings_to_try:
+            try:
+                uploaded_lab_file.seek(0)
+                df_lab = pd.read_csv(
+                    uploaded_lab_file, 
+                    sep=separator, 
+                    encoding=enc, 
+                    skiprows=skip_rows
+                )
+                break
+            except Exception:
+                continue
+                
+        if df_lab is None:
+            st.sidebar.error("Không thể xác định bảng mã phù hợp cho tệp này.")
+        else:
+            # Smart Cleanup Tự động cho bảng tính bẩn:
+            # 1. Bỏ các dòng hoàn toàn rỗng (thường do export thừa)
+            df_lab = df_lab.dropna(how='all')
+            # 2. Bỏ các cột Unnamed nếu chúng hoàn toàn rỗng
+            unnamed_empty = [c for c in df_lab.columns if "Unnamed" in str(c) and df_lab[c].isnull().all()]
+            if unnamed_empty:
+                df_lab = df_lab.drop(columns=unnamed_empty)
+                
+            st.session_state['lab_df'] = df_lab
+            st.sidebar.success(f"✅ Đã nạp ({enc})!")
     except Exception as ex:
-        st.sidebar.error(f"Lỗi khi đọc file: {ex}")
+        st.sidebar.error(f"Lỗi khi xử lý file: {ex}")
 
 # Kiểm tra xem có dữ liệu trong Lab không
 if 'lab_df' in st.session_state:
