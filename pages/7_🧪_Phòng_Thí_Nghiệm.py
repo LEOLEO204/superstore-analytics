@@ -136,6 +136,9 @@ if uploaded_lab_file is not None:
                             pass
 
             st.session_state['lab_df'] = df_lab
+            # CẬP NHẬT ĐỒNG BỘ: Reset lại dataframe kỹ nghệ đặc trưng cho file mới
+            st.session_state['engineered_df'] = df_lab.copy()
+            
             st.sidebar.success(f"✅ Đã nạp ({enc})!")
     except Exception as ex:
         st.sidebar.error(f"Lỗi khi xử lý file: {ex}")
@@ -822,6 +825,7 @@ else:
             try:
                 df_german = pd.read_csv('data/german_credit_data.csv', sep=',')
                 st.session_state['lab_df'] = df_german
+                st.session_state['engineered_df'] = df_german.copy()
                 st.rerun()
             except Exception as e:
                 st.error(f"Không tìm thấy hoặc không đọc được file data/german_credit_data.csv: {e}")
@@ -840,6 +844,7 @@ else:
             try:
                 df_super = pd.read_csv('data/superstore (1).csv', sep=';', encoding='latin1')
                 st.session_state['lab_df'] = df_super
+                st.session_state['engineered_df'] = df_super.copy()
                 st.rerun()
             except Exception as e:
                 st.error(f"Không tìm thấy hoặc không đọc được file data/superstore (1).csv: {e}")
