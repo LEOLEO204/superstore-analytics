@@ -97,7 +97,6 @@ else:
         if st.button("🚀 KÍCH HOẠT NGAY", use_container_width=True):
             if input_key_main.strip():
                 st.session_state.USER_GROQ_KEY = input_key_main.strip()
-                get_ai_agent.clear() # Xóa cache cũ
                 st.success("🎉 Kích hoạt thành công! Đang tải lại...")
                 st.rerun()
             else:

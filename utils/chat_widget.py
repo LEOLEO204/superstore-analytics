@@ -284,9 +284,7 @@ def render_floating_chat(df, rfm_df):
                             if input_key.strip():
                                 st.session_state.USER_GROQ_KEY = input_key.strip()
                                 st.success("Đã nhận Key! Hãy thử hỏi lại nhé.")
-                                # Làm sạch cache resource để buộc khởi tạo lại Agent mới
-                                from utils.chatbot_logic import get_ai_agent
-                                get_ai_agent.clear()
+                                # Làm sạch cache cũ không cần thiết nữa vì đã xóa decorator
                                 st.rerun()
                             else:
                                 st.error("Vui lòng không bỏ trống.")
