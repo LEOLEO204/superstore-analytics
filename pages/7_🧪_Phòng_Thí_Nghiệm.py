@@ -185,13 +185,46 @@ if 'lab_df' in st.session_state:
         st.dataframe(df.head(100), use_container_width=True)
         
     # 2. Nhận diện cột động và tính các KPI tài chính
-    col_map = detect_standard_columns(df)
-    sales_col = col_map['Sales']
-    profit_col = col_map['Profit']
-    cust_col = col_map['Customer ID']
-    
     st.markdown("---")
-    st.markdown("### 🎯 Các Chỉ Số Tài Chính Nhận Diện Tự Động")
+    st.markdown("### 🛠️ Ánh Xạ Dữ Liệu Tự Động (Dynamic Mapping)")
+    
+    # Cung cấp khả năng Override thủ công cho bất kỳ Domain nào
+    auto_col_map = detect_standard_columns(df)
+    
+    with st.expander("⚙️ Tùy chỉnh cột phân tích (Nhấn để ép kiểu thủ công nếu nhận diện sai)", expanded=True):
+        st.markdown("Hệ thống đã tự động nhận diện các cột. Nếu sai, hãy chọn lại cột bạn muốn phân tích bên dưới:")
+        map_col1, map_col2, map_col3 = st.columns(3)
+        
+        all_cols = list(df.columns)
+        numeric_cols = list(df.select_dtypes(include=['number']).columns)
+        
+        with map_col1:
+            default_sales = auto_col_map['Sales']
+            sales_index = all_cols.index(default_sales) if default_sales in all_cols else 0
+            selected_sales_col = st.selectbox("💰 Cột Số tiền / Giá trị cần cộng tổng:", options=["--Không chọn--"] + all_cols, index=all_cols.index(default_sales)+1 if default_sales in all_cols else 0, key="map_sales")
+            
+        with map_col2:
+            default_profit = auto_col_map['Profit']
+            profit_index = all_cols.index(default_profit) if default_profit in all_cols else 0
+            selected_profit_col = st.selectbox("📈 Cột Lợi nhuận / Thứ cấp (Nếu có):", options=["--Không chọn--"] + all_cols, index=all_cols.index(default_profit)+1 if default_profit in all_cols else 0, key="map_profit")
+
+        with map_col3:
+            default_cust = auto_col_map['Customer ID']
+            selected_cust_col = st.selectbox("👤 Cột định danh (Tên, ID, Phân loại chính):", options=["--Không chọn--"] + all_cols, index=all_cols.index(default_cust)+1 if default_cust in all_cols else 0, key="map_cust")
+            
+    # Áp dụng ánh xạ đã chọn
+    sales_col = None if selected_sales_col == "--Không chọn--" else selected_sales_col
+    profit_col = None if selected_profit_col == "--Không chọn--" else selected_profit_col
+    cust_col = None if selected_cust_col == "--Không chọn--" else selected_cust_col
+    
+    # Cập nhật lại bản đồ cột cho các thuật toán khác phía dưới sử dụng
+    effective_col_map = {
+        'Sales': sales_col,
+        'Profit': profit_col,
+        'Customer ID': cust_col
+    }
+
+    st.markdown("### 🎯 Các Chỉ Số Nhận Diện Thực Tế")
     
     k1, k2, k3, k4 = st.columns(4)
     with k1:
@@ -256,14 +289,47 @@ if 'lab_df' in st.session_state:
             except Exception as e:
                 st.error(f"Không thể tạo báo cáo tự động: {e}")
 
-    # 4. Khảo sát phân phối xác suất chuyên sâu
+    # 4. Khảo sát phân phối xác suất chuyên sâu cho TẤT CẢ CỘT SỐ
     st.markdown("---")
-    st.markdown("### 📊 Phân Tích Thống Kê Học & Phân Phối Xác Suất (Bias & Skewness)")
+    st.markdown("### 📊 Phân Tích Thống Kê Học & Phân Phối Xác Suất (Mọi Cột Số)")
     
-    dist_stats = calculate_distribution_stats(df)
+    # Tạo bộ tính toán thống kê nội bộ hoàn toàn Agnostic (Không phụ thuộc tên cột)
+    numeric_cols_to_analyze = list(df.select_dtypes(include=['number']).columns)
+    
+    if not numeric_cols_to_analyze:
+        st.warning("Không tìm thấy cột dữ liệu số nào để thực hiện phân tích thống kê chuyên sâu. Vui lòng sử dụng công cụ 'Làm sạch Tiền tệ' ở Sidebar để chuyển đổi!")
+        dist_stats = {}
+    else:
+        dist_stats = {}
+        for col in numeric_cols_to_analyze:
+            series = df[col].dropna()
+            if len(series) > 0:
+                mean_val = float(series.mean())
+                median_val = float(series.median())
+                std_val = float(series.std())
+                skew_val = float(series.skew())
+                kurt_val = float(series.kurt())
+                cv_val = float(std_val / mean_val) if mean_val > 0 else 0.0
+                
+                # Diễn giải
+                b_desc = "Lệch phải" if skew_val > 0.5 else ("Lệch trái" if skew_val < -0.5 else "Đối xứng tương đối")
+                k_desc = "Đuôi dày/Nhọn" if kurt_val > 3.0 else "Chuẩn/Bẹt"
+                
+                dist_stats[col] = {
+                    'col_name': col,
+                    'mean': mean_val,
+                    'median': median_val,
+                    'std': std_val,
+                    'skew': skew_val,
+                    'kurt': kurt_val,
+                    'cv': cv_val,
+                    'bias_interpretation': f"{b_desc}. Giá trị tập trung lệch về một phía của trung bình.",
+                    'kurt_interpretation': f"{k_desc}. Phản ánh mức độ xuất hiện của ngoại lai."
+                }
+
     if dist_stats:
         selected_stat_label = st.radio(
-            "Chọn chỉ số để khảo sát phân phối xác suất thực nghiệm:",
+            "🎯 Chọn CỘT SỐ bất kỳ bạn muốn khảo sát sâu sắc:",
             options=list(dist_stats.keys()),
             horizontal=True,
             key="lab_stat_radio"
