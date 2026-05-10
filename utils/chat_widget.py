@@ -220,6 +220,7 @@ def render_floating_chat(df, rfm_df):
                     if st.button(btn_label, key=f"faq_btn_{idx}", use_container_width=True):
                         st.session_state.chat_history.append({"role": "user", "content": full_question})
                         st.session_state.is_thinking = True
+                        st.session_state.is_direct_faq = True # Flag khẩn cấp để bỏ qua router
                         st.rerun()
 
             # Input row (Sử dụng text_area thay vì text_input để hiển thị trọn vẹn câu hỏi dài của người dùng)
@@ -261,7 +262,17 @@ def render_floating_chat(df, rfm_df):
                     3. Không thêm các câu chào xã giao lặp đi lặp lại dập khuôn (như 'Xin chào Anh/Chị! Em là...') hay các câu chúc thừa thãi ở cuối mỗi câu trả lời. Hãy đi trực tiếp vào thắc mắc nhưng trả lời ấm áp, chu đáo.
                     4. Nếu là câu hỏi tiếp nối, hãy liên kết chặt chẽ ngữ cảnh trước đó để trả lời đúng trọng tâm.
                     """
-                    res = ask_agent(agent, full_prompt)
+                    # BYPASS SIÊU CẤP: Nếu là nút FAQ bấm nhanh -> Trả lời thẳng luôn không cần phân tích
+                    if st.session_state.get("is_direct_faq", False) and hasattr(agent, 'raw_llm'):
+                        try:
+                            res_obj = agent.raw_llm.invoke(st.session_state.chat_history[-1]["content"])
+                            res = res_obj.content
+                            st.session_state.is_direct_faq = False # Reset flag
+                        except:
+                            res = ask_agent(agent, full_prompt)
+                    else:
+                        res = ask_agent(agent, full_prompt)
+                        
                     st.session_state.chat_history.append({"role": "ai", "content": res})
                 else:
                     # NẾU THIẾU KEY: HIỂN THỊ FORM CẤU HÌNH NGAY TRONG CHAT ĐỂ FIX LỖI
