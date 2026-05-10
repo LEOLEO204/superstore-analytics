@@ -62,6 +62,8 @@ translations = {
         "ai_disclaimer": "Thông tin chỉ mang tính tham khảo, được tư vấn bởi Trí Tuệ Nhân Tạo",
         "api_key_error": "Xin lỗi Anh/Chị, API Key chưa được cấu hình đúng ạ.",
         "ai_overloaded": "🤖 Trợ lý AI đang bị quá tải do hết hạn mức miễn phí của Google. Anh/Chị vui lòng đợi 15-30 giây rồi thử lại nhé!",
+        "logout": "🚪 Đăng xuất",
+        "hello": "Xin chào",
     },
     "en": {
         # App.py
@@ -123,6 +125,8 @@ translations = {
         "ai_disclaimer": "Information is for reference only, consulted by Artificial Intelligence",
         "api_key_error": "Sorry, the API Key is not configured correctly.",
         "ai_overloaded": "🤖 The AI Assistant is overloaded due to Google's free tier limit. Please wait 15-30 seconds and try again!",
+        "logout": "🚪 Log out",
+        "hello": "Hello",
     }
 }
 

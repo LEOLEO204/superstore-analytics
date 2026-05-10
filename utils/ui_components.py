@@ -1,6 +1,7 @@
 # pyrefly: ignore [missing-import]
 import streamlit as st
 import os
+from utils.i18n import t
 
 def inject_custom_css():
     # Read config to determine theme
@@ -161,16 +162,24 @@ def render_top_bar():
                 is_dark_current = False
 
     # Top right container
-    cols = st.columns([8, 1, 1])
+    cols = st.columns([5.5, 1.5, 1.5, 1.5])
     
     with cols[1]:
+        # Nút Đăng xuất
+        if st.button(t('logout'), key="top_logout_btn", use_container_width=True, type="primary"):
+            st.session_state.authenticated = False
+            if "username" in st.session_state:
+                del st.session_state.username
+            st.rerun()
+            
+    with cols[2]:
         # Theme toggle
         theme_label = "🌙 Dark" if is_dark_current else "☀️ Light"
         if st.button(theme_label, key="theme_toggle", use_container_width=True):
             switch_theme(not is_dark_current)
             st.rerun()
             
-    with cols[2]:
+    with cols[3]:
         # Language selectbox
         lang = st.session_state.get("lang", "vi")
         new_lang = st.selectbox(
@@ -303,4 +312,5 @@ def check_authentication(page_name="Trang Chủ"):
         st.stop()
     else:
         # Nếu đã đăng nhập, ghi log hoạt động xem trang hiện tại
-        log_activity(st.session_state.get("username", "admin"), page_name)
+        current_user = st.session_state.get("username", "admin")
+        log_activity(current_user, page_name)

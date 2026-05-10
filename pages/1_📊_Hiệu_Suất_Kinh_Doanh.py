@@ -13,6 +13,9 @@ from utils.ui_components import inject_custom_css, render_top_bar, render_page_h
 from utils.i18n import t
 
 st.set_page_config(page_title="Phân tích Kinh doanh", layout="wide")
+import importlib
+import utils.ui_components
+importlib.reload(utils.ui_components)
 from utils.ui_components import check_authentication
 check_authentication("Hiệu Suất Kinh Doanh")
 inject_custom_css()

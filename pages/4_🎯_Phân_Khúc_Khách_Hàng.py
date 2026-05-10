@@ -5,6 +5,9 @@ import numpy as np
 import plotly.express as px
 from utils.data_processor import load_and_clean_data, calculate_rfm
 from utils.chat_widget import render_floating_chat
+import importlib
+import utils.ui_components
+importlib.reload(utils.ui_components)
 from utils.ui_components import inject_custom_css, render_top_bar, render_page_header
 from utils.i18n import t
 
