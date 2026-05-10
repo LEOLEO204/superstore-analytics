@@ -37,7 +37,6 @@ def get_ai_agent(df, rfm_df):
         Hãy thân thiện xưng Em, trả lời chuyên sâu và tập trung vào phân tích kinh doanh.
         """
         
-        # Trả về cả LLM và Agent để hệ thống có thể lựa chọn Routing thông minh ở dưới
         agent = create_pandas_dataframe_agent(
             llm, 
             [df, rfm_df], 
@@ -45,12 +44,10 @@ def get_ai_agent(df, rfm_df):
             allow_dangerous_code=True,
             prefix=PREFIX,
             agent_type="tool-calling",
-            handle_parsing_errors=True,
-            max_iterations=2, # Giảm số vòng lặp để tối đa hóa tốc độ
-            max_execution_time=5 # Chặn đứng hiện tượng treo sau 5 giây
+            max_iterations=2,
+            max_execution_time=5
         )
-        # Đính kèm raw LLM vào agent object để sử dụng trong ask_agent nếu cần Routing
-        setattr(agent, 'raw_llm', llm)
+        # KHÔNG ĐƯỢC DÙNG setattr vì agent là Pydantic Model cấm gán cứng
         return agent
     except Exception as e:
         print(f"Agent Init Err: {e}")
@@ -58,37 +55,47 @@ def get_ai_agent(df, rfm_df):
 
 def ask_agent(agent, prompt):
     """
-    Hàm xử lý định tuyến thông minh (Router): 
-    - Nếu là câu hỏi lý thuyết/giải thích -> Trả lời bằng LLM gốc (Cực nhanh, 0.5 giây)
-    - Nếu là câu hỏi dữ liệu -> Gọi Pandas Agent (Tốn 3-5 giây)
+    Router thông minh: Cấp cứu tức thời nếu Agent bị treo hoặc lỗi Pydantic.
     """
+    # Khởi tạo nhanh Raw LLM để dự phòng khẩn cấp
+    fallback_llm = None
+    try:
+        api_key = st.session_state.get("USER_GROQ_KEY")
+        if not api_key:
+            api_key = st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY"))
+        if api_key and api_key != "your_google_api_key_here":
+            fallback_llm = ChatGroq(
+                model_name="llama-3.3-70b-versatile", 
+                api_key=api_key, 
+                temperature=0.2
+            )
+    except:
+        pass
+
     try:
         query_lower = prompt.lower()
-        # TẬP TRUNG TỐI ƯU TỐC ĐỘ: Nhận diện từ khóa lý thuyết
         is_theory = any(kw in query_lower for kw in [
             "là gì", "thế nào", "giải thích", "lợi ích", "giúp ích", "tại sao", "xin chào", "hello", "chào em"
         ])
         
-        # EXPRESS ROUTE: Trả lời lý thuyết siêu tốc
-        if is_theory and hasattr(agent, 'raw_llm'):
-            response = agent.raw_llm.invoke(prompt)
+        # ROUTE 1: Lý thuyết -> Raw LLM (0.5 giây)
+        if is_theory and fallback_llm:
+            response = fallback_llm.invoke(prompt)
             return response.content
 
-        # ROUTE DỮ LIỆU: Phân tích số liệu bằng Agent
-        # Tối ưu hóa: Ép kiểu timeout để đảm bảo không bao giờ treo 2 phút
+        # ROUTE 2: Phân tích số liệu -> Pandas Agent
+        if agent is None and fallback_llm:
+            # Cứu hộ nếu agent bị lỗi khởi tạo
+            return fallback_llm.invoke(prompt).content
+            
         response = agent.invoke({"input": prompt})
         return response["output"]
     except Exception as e:
-        error_str = str(e)
-        if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-            return t("ai_overloaded")
-        if "OUTPUT_PARSING_FAILURE" in error_str:
-            parts = error_str.split("`")
-            return parts[1] if len(parts) > 1 else str(e)
-        # Nếu Agent lỗi, hãy thử fallback lần cuối bằng Raw LLM thay vì báo lỗi chết
-        if hasattr(agent, 'raw_llm'):
+        # ROUTE 3: Fallback cứu cánh cuối cùng
+        if fallback_llm:
             try:
-                return agent.raw_llm.invoke(prompt).content
+                res = fallback_llm.invoke(prompt)
+                return res.content
             except:
                 pass
         return f"{t('ai_error')} {e}"
