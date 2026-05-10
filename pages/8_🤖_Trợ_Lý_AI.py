@@ -57,6 +57,12 @@ if agent:
                 counts = rfm_df['Segment'].value_counts()
                 rfm_summary = ", ".join([f"{k}: {v} khách" for k, v in counts.items()])
 
+            # BỔ SUNG: Trích xuất dữ liệu Churn Risk cho báo cáo
+            churn_summary = "Không có dữ liệu"
+            if 'Churn_Risk' in rfm_df.columns:
+                c_counts = rfm_df['Churn_Risk'].value_counts()
+                churn_summary = ", ".join([f"{k}: {v} khách" for k, v in c_counts.items()])
+
             prompt = f"""
             Em hãy viết một báo cáo phân tích chiến lược kinh doanh chuyên sâu học thuật (dùng trong Đồ án tốt nghiệp ngành CNTT/Khoa học dữ liệu) dựa trên các số liệu thực tế được tính toán tự động từ hệ thống như sau:
             - Tổng Doanh số: ${total_sales:,.2f}
@@ -65,13 +71,15 @@ if agent:
             - Khu vực lỗ/kém hiệu quả nhất: {worst_region}
             - Danh mục sản phẩm lỗ/kém hiệu quả nhất: {worst_category}
             - Phân phối phân khúc khách hàng RFM hiện tại: {rfm_summary}
+            - PHÂN TÍCH RỦI RO RỜI BỎ (CHURN RISK): {churn_summary}
             
             YÊU CẦU BẮT BUỘC CHO ĐỒ ÁN TỐT NGHIỆP:
             Báo cáo phải được viết cực kỳ chi tiết, mang tính học thuật cao, có chiều sâu và phải lồng ghép khéo léo các phương pháp chuyên môn đã triển khai trong đồ án:
             1. Đánh giá kinh doanh: Phân tích sâu sắc ý nghĩa của con số Doanh số và Lợi nhuận trên, hiệu suất biên lợi nhuận thực tế đạt {margin:.2f}%.
             2. Vấn đề cốt lõi: Đưa ra nhận định sâu sắc về việc tại sao khu vực '{worst_region}' và danh mục '{worst_category}' lại kém hiệu quả. Hãy giải thích rằng việc hệ thống tích hợp bộ kiểm định giả thuyết thống kê Welch's t-Test và One-Way ANOVA đã giúp chứng minh sự khác biệt về doanh thu giữa các nhóm này có ý nghĩa thống kê thực sự (p-value < 0.05) chứ không phải do yếu tố ngẫu nhiên ngoài thực tế.
-            3. Kỹ nghệ đặc trưng (Feature Engineering Lab): Phân tích tầm quan trọng của việc biến đổi dữ liệu (Log Transformation để chuẩn hóa phân phối lệch phải Skewness, Chuẩn hóa Scaling MinMax/Standard để đồng bộ thang đo, Phân nhóm Binning và Mã hóa One-Hot/Label Encoding) đã đóng vai trò cốt lõi thế nào trong việc làm sạch dữ liệu để huấn luyện thuật toán RFM và Hồi quy chuỗi thời gian.
-            4. Đề xuất kịch bản chiến dịch Marketing cụ thể theo phân khúc RFM đã tính toán (tri ân nhóm VIP/Champions và tái kích hoạt nhóm At Risk).
+            3. Chẩn đoán Churn Risk (BẮT BUỘC): Đánh giá chi tiết về tình trạng rời bỏ của khách hàng dựa trên dữ liệu ({churn_summary}). Đề xuất biện pháp can thiệp chủ động để giảm thiểu tỷ lệ Churn.
+            4. Kỹ nghệ đặc trưng (Feature Engineering Lab): Phân tích tầm quan trọng của việc biến đổi dữ liệu (Log Transformation để chuẩn hóa phân phối lệch phải Skewness, Chuẩn hóa Scaling MinMax/Standard để đồng bộ thang đo, Phân nhóm Binning và Mã hóa One-Hot/Label Encoding) đã đóng vai trò cốt lõi thế nào trong việc làm sạch dữ liệu để huấn luyện thuật toán RFM và Hồi quy chuỗi thời gian.
+            5. Đề xuất kịch bản chiến dịch Marketing cụ thể theo phân khúc RFM đã tính toán (tri ân nhóm VIP/Champions và tái kích hoạt nhóm At Risk).
             
             Hãy viết bằng tiếng Việt, trình bày Markdown lộng lẫy, sử dụng các ký hiệu biểu tượng chuyên nghiệp, phân chia các tiêu mục rõ ràng và có lập luận sắc bén của một chuyên gia Khoa học dữ liệu thực thụ.
             """
