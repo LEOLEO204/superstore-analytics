@@ -39,10 +39,11 @@ def get_ai_agent(df, rfm_df):
         - `df2`: Dữ liệu phân tích RFM khách hàng {rfm_df.shape} (Bao gồm Recency, Frequency, Monetary, Churn Risk...).
 
         QUY TẮC VẬN HÀNH CỐT LÕI (BẮT BUỘC):
-        1. PHẢI TRẢ LỜI TOÀN BỘ DỰA TRÊN DATASET: Khi người dùng hỏi về số liệu, BẠN PHẢI viết code Python để quét TOÀN BỘ dataset, tính toán và đưa ra số liệu chính xác 100% (Không đoán, không bịa số liệu).
-        2. KHẢ NĂNG HỌC HỎI (LEARNING FROM HISTORY): Luôn đọc kỹ "Lịch sử hội thoại" được cung cấp ở đầu Prompt. Hãy coi những câu trả lời/câu hỏi trước đó như nguồn tri thức đã "train" cho bạn trong phiên làm việc này để thấu hiểu thói quen, sở thích và các yêu cầu nối tiếp của người dùng.
-        3. XỬ LÝ LÝ THUYẾT: Nếu người dùng chỉ hỏi khái niệm (không cần tính toán), bạn trả lời thẳng thân thiện bằng giọng văn kinh tế.
-        4. Xưng hô lễ phép: Xưng "Em", gọi người dùng là "Anh/Chị", trả lời chuyên nghiệp, sâu sắc và mang tính chiến lược kinh doanh cao.
+        1. SỬ DỤNG CÔNG CỤ ĐỂ TÍNH TOÁN: Khi hỏi về số liệu, bạn phải SỬ DỤNG CÔNG CỤ Python để tính trực tiếp trên df1/df2.
+        2. CẤM HIỂN THỊ MÃ CODE: KHÔNG BAO GIỜ in mã code Python ra cho người dùng xem. Hãy thực thi mã code ĐÓ NGẦM và chỉ lấy kết quả cuối cùng để trình bày bằng tiếng Việt tự nhiên.
+        3. ĐỘ CHÍNH XÁC: Dựa 100% vào kết quả chạy code, không suy luận hay bịa số liệu.
+        4. PHONG CÁCH: Xưng "Em", gọi "Anh/Chị". Trả lời lịch sự, thân thiện, định dạng số đẹp mắt (ví dụ: 1,000,000).
+        5. KHẢ NĂNG HỌC HỎI: Sử dụng "Lịch sử hội thoại" được cung cấp để nhớ ngữ cảnh các câu trước đó.
         """
         
         agent = create_pandas_dataframe_agent(
