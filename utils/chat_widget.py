@@ -245,23 +245,24 @@ def render_floating_chat(df, rfm_df):
                     if agent:
                         # Định dạng lịch sử hội thoại để cung cấp trí nhớ (Memory) cho AI
                         history_str = ""
-                        # Lấy tối đa 5 tin nhắn gần nhất để giữ tốc độ phản hồi nhanh
-                        recent_history = st.session_state.chat_history[:-1][-5:]
+                        # Lấy tối đa 12 tin nhắn gần nhất để tạo "Vùng Huấn Luyện Ngắn Hạn" liên tục cho AI
+                        recent_history = st.session_state.chat_history[:-1][-12:]
                         for msg in recent_history:
                             role_label = "Người dùng" if msg["role"] == "user" else "Trợ lý AI (Em)"
                             history_str += f"{role_label}: {msg['content']}\n"
                             
                         full_prompt = f"""
-                        Lịch sử hội thoại gần đây (Hãy nhớ thông tin này để đối thoại tiếp nối tự nhiên):
+                        --- BỘ NHỚ HỌC TẬP TRONG PHIÊN (CONVERSATIONAL TRAINING DATA) ---
+                        Đọc kỹ nội dung trao đổi trước đó bên dưới để THẤU HIỂU thói quen, sở thích và lịch sử tư vấn cho người dùng:
                         {history_str}
+                        -----------------------------------------------------------------
                         
-                        Yêu cầu mới của Người dùng: {st.session_state.chat_history[-1]["content"]}
+                        YÊU CẦU MỚI NHẤT: {st.session_state.chat_history[-1]["content"]}
                         
-                        Yêu cầu phong cách phản hồi (Sự kết hợp hoàn hảo giữa THÂN THIỆN và TRỰC DIỆN, KHÔNG CỘC LỐC, KHÔNG THỪA THÃI):
-                        1. Trả lời một cách niềm nở, thân thiện, xưng "Em" và gọi người dùng là "Anh/Chị". Tuyệt đối không trả lời cộc lốc, khô khan kiểu máy móc.
-                        2. Giải thích kết quả rõ ràng, có phân tích kinh doanh ngắn để giúp người dùng hiểu sâu sắc giá trị số liệu, chứ không chỉ quăng số liệu khan.
-                        3. Không thêm các câu chào xã giao lặp đi lặp lại dập khuôn (như 'Xin chào Anh/Chị! Em là...') hay các câu chúc thừa thãi ở cuối mỗi câu trả lời. Hãy đi trực tiếp vào thắc mắc nhưng trả lời ấm áp, chu đáo.
-                        4. Nếu là câu hỏi tiếp nối, hãy liên kết chặt chẽ ngữ cảnh trước đó để trả lời đúng trọng tâm.
+                        YÊU CẦU VẬN HÀNH (LEARNING & ANALYSIS):
+                        1. Luôn phân tích TOÀN BỘ DỮ LIỆU (df1, df2) nếu có câu hỏi về số liệu, không ước lượng.
+                        2. Sử dụng BỘ NHỚ HỌC TẬP ở trên để cá nhân hóa câu trả lời, đảm bảo tính liên kết cực cao với các câu hỏi cũ.
+                        3. Phong cách: Niềm nở, thân thiện, xưng "Em" gọi "Anh/Chị". Phân tích thông minh, ngắn gọn, đi thẳng vào trọng tâm.
                         """
                         # Trả lại quyền xử lý toàn diện cho Router thông minh của ask_agent
                         res = ask_agent(agent, full_prompt)

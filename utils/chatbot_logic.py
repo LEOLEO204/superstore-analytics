@@ -33,11 +33,16 @@ def get_ai_agent(df, rfm_df):
         )
         
         PREFIX = f"""
-        Bạn là Trợ lý AI của siêu thị Superstore. Bạn đang được cấp 2 DataFrame: 
-        1. df1: Transactions {df.shape}. 2. df2: Customer RFM {rfm_df.shape}.
-        
-        NẾU câu hỏi CHỈ LÀ giải thích khái niệm hoặc chào hỏi (KHÔNG cần tính toán số liệu), hãy trả lời thẳng mà KHÔNG dùng python.
-        Hãy thân thiện xưng Em, trả lời chuyên sâu và tập trung vào phân tích kinh doanh.
+        BẠN LÀ CHUYÊN GIA PHÂN TÍCH DỮ LIỆU CẤP CAO (Senior AI Data Analyst) của Superstore.
+        Bạn sở hữu quyền truy cập TUYỆT ĐỐI vào toàn bộ cơ sở dữ liệu thực tế sau đây:
+        - `df1`: Dữ liệu giao dịch gốc {df.shape} (Bao gồm Sales, Profit, Order Date, Region...).
+        - `df2`: Dữ liệu phân tích RFM khách hàng {rfm_df.shape} (Bao gồm Recency, Frequency, Monetary, Churn Risk...).
+
+        QUY TẮC VẬN HÀNH CỐT LÕI (BẮT BUỘC):
+        1. PHẢI TRẢ LỜI TOÀN BỘ DỰA TRÊN DATASET: Khi người dùng hỏi về số liệu, BẠN PHẢI viết code Python để quét TOÀN BỘ dataset, tính toán và đưa ra số liệu chính xác 100% (Không đoán, không bịa số liệu).
+        2. KHẢ NĂNG HỌC HỎI (LEARNING FROM HISTORY): Luôn đọc kỹ "Lịch sử hội thoại" được cung cấp ở đầu Prompt. Hãy coi những câu trả lời/câu hỏi trước đó như nguồn tri thức đã "train" cho bạn trong phiên làm việc này để thấu hiểu thói quen, sở thích và các yêu cầu nối tiếp của người dùng.
+        3. XỬ LÝ LÝ THUYẾT: Nếu người dùng chỉ hỏi khái niệm (không cần tính toán), bạn trả lời thẳng thân thiện bằng giọng văn kinh tế.
+        4. Xưng hô lễ phép: Xưng "Em", gọi người dùng là "Anh/Chị", trả lời chuyên nghiệp, sâu sắc và mang tính chiến lược kinh doanh cao.
         """
         
         agent = create_pandas_dataframe_agent(
@@ -47,10 +52,9 @@ def get_ai_agent(df, rfm_df):
             allow_dangerous_code=True,
             prefix=PREFIX,
             agent_type="tool-calling",
-            max_iterations=2,
-            max_execution_time=5
+            max_iterations=4, # Tăng số lần lặp để AI có thể suy nghĩ sâu hơn và sửa lỗi code nếu gặp lỗi
+            max_execution_time=15 # Tăng thời gian để có đủ tài nguyên xử lý query phức tạp
         )
-        # KHÔNG ĐƯỢC DÙNG setattr vì agent là Pydantic Model cấm gán cứng
         return agent
     except Exception as e:
         # Thay vì trả về None (khiến UI báo nhầm là thiếu Key), hãy NÉM LỖI ra ngoài để UI báo cáo đúng nguyên nhân thật sự!
