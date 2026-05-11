@@ -80,15 +80,33 @@ def ask_agent(agent, prompt):
         pass
 
     try:
-        query_lower = prompt.lower()
+        # CHỈ XÉT CÂU HỎI MỚI NHẤT ĐỂ PHÂN LOẠI (Tránh việc History chứa từ khóa "chào" làm sai lệch Router)
+        raw_user_query = prompt # Mặc định
+        try:
+            if "chat_history" in st.session_state and len(st.session_state.chat_history) > 0:
+                raw_user_query = st.session_state.chat_history[-1]["content"]
+        except:
+            pass
+            
+        query_lower = raw_user_query.lower()
+        # Phân biệt lý thuyết thuần túy
         is_theory = any(kw in query_lower for kw in [
-            "là gì", "thế nào", "giải thích", "lợi ích", "giúp ích", "tại sao", "xin chào", "hello", "chào em"
+            "là gì", "thế nào", "giải thích", "định nghĩa", "là sao"
+        ])
+        # Cần kiểm tra xem trong câu có hỏi về số liệu không (Ưu tiên 1)
+        has_data_keywords = any(kw in query_lower for kw in [
+            "bao nhiêu", "mấy", "thống kê", "tổng", "số lượng", "trung bình", "tỷ lệ", "list", "danh sách"
         ])
         
-        # ROUTE 1: Lý thuyết -> Raw LLM (0.5 giây)
-        if is_theory and fallback_llm:
+        # ROUTE 1: Lý thuyết THUẦN TÚY (Không hề đả động đến số liệu) -> Raw LLM
+        if is_theory and not has_data_keywords and fallback_llm:
             response = fallback_llm.invoke(prompt)
             return response.content
+            
+        # ROUTE 2: Nếu chỉ là chào hỏi ngắn gọn (Dưới 4 từ) -> Raw LLM cho nhanh
+        if len(query_lower.split()) <= 3 and any(kw in query_lower for kw in ["chào", "hi", "hello"]) and fallback_llm:
+             response = fallback_llm.invoke(prompt)
+             return response.content
 
         # ROUTE 2: Phân tích số liệu -> Pandas Agent
         if agent is None and fallback_llm:
