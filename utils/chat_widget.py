@@ -240,55 +240,42 @@ def render_floating_chat(df, rfm_df):
                 
             # Nếu đang thinking thì gọi agent
             if st.session_state.get("is_thinking", False):
-                agent = get_ai_agent(df, rfm_df)
-                if agent:
-                    # Định dạng lịch sử hội thoại để cung cấp trí nhớ (Memory) cho AI
-                    history_str = ""
-                    # Lấy tối đa 5 tin nhắn gần nhất để giữ tốc độ phản hồi nhanh
-                    recent_history = st.session_state.chat_history[:-1][-5:]
-                    for msg in recent_history:
-                        role_label = "Người dùng" if msg["role"] == "user" else "Trợ lý AI (Em)"
-                        history_str += f"{role_label}: {msg['content']}\n"
+                try:
+                    agent = get_ai_agent(df, rfm_df)
+                    if agent:
+                        # Định dạng lịch sử hội thoại để cung cấp trí nhớ (Memory) cho AI
+                        history_str = ""
+                        # Lấy tối đa 5 tin nhắn gần nhất để giữ tốc độ phản hồi nhanh
+                        recent_history = st.session_state.chat_history[:-1][-5:]
+                        for msg in recent_history:
+                            role_label = "Người dùng" if msg["role"] == "user" else "Trợ lý AI (Em)"
+                            history_str += f"{role_label}: {msg['content']}\n"
+                            
+                        full_prompt = f"""
+                        Lịch sử hội thoại gần đây (Hãy nhớ thông tin này để đối thoại tiếp nối tự nhiên):
+                        {history_str}
                         
-                    full_prompt = f"""
-                    Lịch sử hội thoại gần đây (Hãy nhớ thông tin này để đối thoại tiếp nối tự nhiên):
-                    {history_str}
-                    
-                    Yêu cầu mới của Người dùng: {st.session_state.chat_history[-1]["content"]}
-                    
-                    Yêu cầu phong cách phản hồi (Sự kết hợp hoàn hảo giữa THÂN THIỆN và TRỰC DIỆN, KHÔNG CỘC LỐC, KHÔNG THỪA THÃI):
-                    1. Trả lời một cách niềm nở, thân thiện, xưng "Em" và gọi người dùng là "Anh/Chị". Tuyệt đối không trả lời cộc lốc, khô khan kiểu máy móc.
-                    2. Giải thích kết quả rõ ràng, có phân tích kinh doanh ngắn để giúp người dùng hiểu sâu sắc giá trị số liệu, chứ không chỉ quăng số liệu khan.
-                    3. Không thêm các câu chào xã giao lặp đi lặp lại dập khuôn (như 'Xin chào Anh/Chị! Em là...') hay các câu chúc thừa thãi ở cuối mỗi câu trả lời. Hãy đi trực tiếp vào thắc mắc nhưng trả lời ấm áp, chu đáo.
-                    4. Nếu là câu hỏi tiếp nối, hãy liên kết chặt chẽ ngữ cảnh trước đó để trả lời đúng trọng tâm.
-                    """
-                    # Trả lại quyền xử lý toàn diện cho Router thông minh của ask_agent
-                    res = ask_agent(agent, full_prompt)
-                    st.session_state.chat_history.append({"role": "ai", "content": res})
-                else:
-                    # NẾU THIẾU KEY: HIỂN THỊ FORM CẤU HÌNH NGAY TRONG CHAT ĐỂ FIX LỖI
-                    st.session_state.chat_history.append({
-                        "role": "ai", 
-                        "content": "⚠️ Chưa tìm thấy API Key. Vui lòng nhập Groq API Key bên dưới thanh chat để kích hoạt ngay."
-                    })
-                    st.session_state.show_key_fixer = True
-                    
-                st.session_state.is_thinking = False
-                st.rerun()
-
-            # TỰ ĐỘNG HIỂN THỊ Ô NHẬP KEY NẾU CHƯA CÓ
-            if not st.session_state.get("USER_GROQ_KEY"):
-                from utils.chatbot_logic import get_ai_agent
-                if get_ai_agent(df, rfm_df) is None:
-                    with st.expander("🔑 CẤU HÌNH KHẨN CẤP: NHẬP API KEY", expanded=True):
-                        input_key = st.text_input("Dán API Key của bạn vào đây:", type="password", key="runtime_key_box")
-                        if st.button("✅ LƯU & KÍCH HOẠT AI", use_container_width=True):
-                            if input_key.strip():
-                                st.session_state.USER_GROQ_KEY = input_key.strip()
-                                st.success("Đã nhận Key! Hãy thử hỏi lại nhé.")
-                                # Làm sạch cache cũ không cần thiết nữa vì đã xóa decorator
-                                st.rerun()
-                            else:
-                                st.error("Vui lòng không bỏ trống.")
+                        Yêu cầu mới của Người dùng: {st.session_state.chat_history[-1]["content"]}
+                        
+                        Yêu cầu phong cách phản hồi (Sự kết hợp hoàn hảo giữa THÂN THIỆN và TRỰC DIỆN, KHÔNG CỘC LỐC, KHÔNG THỪA THÃI):
+                        1. Trả lời một cách niềm nở, thân thiện, xưng "Em" và gọi người dùng là "Anh/Chị". Tuyệt đối không trả lời cộc lốc, khô khan kiểu máy móc.
+                        2. Giải thích kết quả rõ ràng, có phân tích kinh doanh ngắn để giúp người dùng hiểu sâu sắc giá trị số liệu, chứ không chỉ quăng số liệu khan.
+                        3. Không thêm các câu chào xã giao lặp đi lặp lại dập khuôn (như 'Xin chào Anh/Chị! Em là...') hay các câu chúc thừa thãi ở cuối mỗi câu trả lời. Hãy đi trực tiếp vào thắc mắc nhưng trả lời ấm áp, chu đáo.
+                        4. Nếu là câu hỏi tiếp nối, hãy liên kết chặt chẽ ngữ cảnh trước đó để trả lời đúng trọng tâm.
+                        """
+                        # Trả lại quyền xử lý toàn diện cho Router thông minh của ask_agent
+                        res = ask_agent(agent, full_prompt)
+                        st.session_state.chat_history.append({"role": "ai", "content": res})
+                    else:
+                        # NẾU THIẾU KEY
+                        st.session_state.chat_history.append({
+                            "role": "ai", 
+                            "content": "⚠️ Không tìm thấy API Key hợp lệ. Vui lòng cấu hình API Key trong file `.env` hoặc Streamlit Secrets."
+                        })
+                except Exception as e:
+                    st.session_state.chat_history.append({"role": "ai", "content": f"❌ Lỗi hệ thống AI: {str(e)}"})
+                finally:
+                    st.session_state.is_thinking = False
+                    st.rerun()
                 
             st.markdown(f'<div class="chat-footer">{t("ai_disclaimer")}</div>', unsafe_allow_html=True)

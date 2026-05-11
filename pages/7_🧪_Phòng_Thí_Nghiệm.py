@@ -347,14 +347,31 @@ if 'lab_df' in st.session_state:
     st.markdown("### 🤖 Trợ Lý AI: Trung Tâm Chẩn Đoán Dữ Liệu Tự Động")
     
     with st.expander("📊 Xem Báo cáo Phân tích Chẩn đoán Dữ liệu từ AI Agent", expanded=True):
-        with st.spinner("AI Agent đang tự động đọc dữ liệu và xây dựng báo cáo phân tích..."):
-            try:
-                ai_report = get_automated_dataset_report(df)
-                st.markdown('<div style="background-color: #f8f9fa; border-left: 5px solid #ffd400; padding: 25px; border-radius: 8px; line-height: 1.6;">', unsafe_allow_html=True)
-                st.markdown(ai_report)
-                st.markdown('</div>', unsafe_allow_html=True)
-            except Exception as e:
-                st.error(f"Không thể tạo báo cáo tự động: {e}")
+        # Sử dụng session state để duy trì kết quả sau khi bấm nút, tránh việc biến mất khi tương tác các widget khác
+        if 'ai_report_requested' not in st.session_state:
+            st.session_state.ai_report_requested = False
+            
+        if not st.session_state.ai_report_requested:
+            st.markdown("💡 **Gợi ý:** Kích hoạt Trợ lý AI để quét sâu toàn bộ tập dữ liệu và tự động viết báo cáo đề xuất chiến lược.")
+            if st.button("🚀 BẮT ĐẦU PHÂN TÍCH BẰNG AI", use_container_width=True):
+                st.session_state.ai_report_requested = True
+                st.rerun()
+        
+        if st.session_state.ai_report_requested:
+            with st.spinner("AI Agent đang tự động đọc dữ liệu và xây dựng báo cáo phân tích..."):
+                try:
+                    ai_report = get_automated_dataset_report(df)
+                    st.markdown('<div style="background-color: #f8f9fa; border-left: 5px solid #ffd400; padding: 25px; border-radius: 8px; line-height: 1.6;">', unsafe_allow_html=True)
+                    st.markdown(ai_report)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    if st.button("🔄 Làm mới báo cáo", key="refresh_ai_report"):
+                        st.cache_data.clear() # Xóa cache để gọi lại API
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Không thể tạo báo cáo tự động: {e}")
+                    if st.button("Thử lại"):
+                        st.rerun()
 
     # 4. Khảo sát phân phối xác suất chuyên sâu cho TẤT CẢ CỘT SỐ
     st.markdown("---")

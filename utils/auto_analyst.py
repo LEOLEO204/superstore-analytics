@@ -127,9 +127,11 @@ def generate_cached_ai_report(metadata_str):
     except Exception as e:
         return f"❌ Đã xảy ra lỗi trong quá trình tạo báo cáo AI: {str(e)}"
 
+@st.cache_data(show_spinner=False, hash_funcs={pd.DataFrame: lambda d: f"{d.shape[0]}_{d.shape[1]}_{d.columns.tolist()}"})
 def get_automated_dataset_report(df):
     """
     Hàm giao tiếp chính để tính toán metadata và sinh báo cáo tự động (có cache).
+    Sử dụng cơ chế hash tùy chỉnh cực nhẹ giúp không bị giật lag khi rerun trang.
     """
     metadata = compute_dataset_metadata(df)
     # Chuyển đổi metadata thành chuỗi dạng JSON hoặc string để có thể băm (hash) làm khóa cache cho Streamlit
