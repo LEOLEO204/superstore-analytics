@@ -19,8 +19,11 @@ def get_ai_agent(df, rfm_df):
     except Exception:
         api_key = os.environ.get("GROQ_API_KEY")
     
+    # Debug chẩn đoán nhanh không in ra giá trị bảo mật
     if not api_key or api_key == "your_google_api_key_here":
-        return None
+        # Liệt kê các keys hiện có trong Secrets để người dùng đối chiếu (KHÔNG IN GIÁ TRỊ KEY)
+        existing_keys = list(st.secrets.keys()) if st.secrets else []
+        raise ValueError(f"Không tìm thấy 'GROQ_API_KEY'. Các biến có trong Secrets hiện tại là: {existing_keys}")
         
     try:
         llm = ChatGroq(
