@@ -3,7 +3,8 @@ pandas
 plotly
 google-generativeai
 langchain-google-genai
-langchain_experimental
+langchain-experimental
 python-dotenv
 scipy
 langchain-groq
+tabulate
