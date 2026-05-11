@@ -50,8 +50,8 @@ def get_ai_agent(df, rfm_df):
         # KHÔNG ĐƯỢC DÙNG setattr vì agent là Pydantic Model cấm gán cứng
         return agent
     except Exception as e:
-        print(f"Agent Init Err: {e}")
-        return None
+        # Thay vì trả về None (khiến UI báo nhầm là thiếu Key), hãy NÉM LỖI ra ngoài để UI báo cáo đúng nguyên nhân thật sự!
+        raise RuntimeError(f"Lỗi khởi tạo LangChain Agent: {str(e)}")
 
 def ask_agent(agent, prompt):
     """
