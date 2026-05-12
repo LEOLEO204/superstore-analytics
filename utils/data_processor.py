@@ -25,9 +25,69 @@ def get_active_dataset_path():
 def get_db_connection():
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
 
-def initialize_database():
+def validate_and_clean_sop(df):
     """
-    Khởi tạo cơ sở dữ liệu SQLite từ file CSV nếu chưa tồn tại.
+    Thực thi Quy trình chuẩn SOP: Bước 2 (Kiểm tra cấu trúc) và Bước 3 (Làm sạch dữ liệu).
+    """
+    # --- BƯỚC 2: KIỂM TRA CẤU TRÚC DỮ LIỆU ---
+    required_cols = [
+        'Order ID', 'Order Date', 'Ship Date', 'Ship Mode', 
+        'Customer ID', 'Customer Name', 'Segment', 
+        'City', 'State', 'Country', 'Region', 'Market', 
+        'Product ID', 'Category', 'Sub-Category', 'Product Name', 
+        'Sales', 'Quantity', 'Discount', 'Profit', 'Shipping Cost', 'Order Priority'
+    ]
+    
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Dataset không hợp lệ. Thiếu các cột bắt buộc: {', '.join(missing_cols)}. Vui lòng kiểm tra lại cấu trúc file.")
+    
+    df_cleaned = df.copy()
+    
+    # --- BƯỚC 3: LÀM SẠCH DỮ LIỆU ---
+    # 3.1. Xóa dòng trống
+    df_cleaned = df_cleaned.dropna(subset=['Order ID', 'Order Date', 'Sales', 'Profit'])
+    
+    # 3.2. Chuẩn hóa ngày tháng (Hỗ trợ tự động định dạng dd/mm/yyyy hoặc yyyy-mm-dd)
+    for date_col in ['Order Date', 'Ship Date']:
+        df_cleaned[date_col] = pd.to_datetime(df_cleaned[date_col], dayfirst=True, errors='coerce')
+    
+    # Kiểm tra lỗi dữ liệu ngày tháng (SOP Step 9)
+    if df_cleaned['Order Date'].isnull().any() or df_cleaned['Ship Date'].isnull().any():
+        # Chỉ giữ lại những dòng chuyển đổi ngày thành công
+        df_cleaned = df_cleaned.dropna(subset=['Order Date', 'Ship Date'])
+        
+    # 3.3. Chuyển Sales, Profit, Discount, Quantity, Shipping Cost sang dạng số
+    numeric_cols = ['Sales', 'Profit', 'Discount', 'Quantity', 'Shipping Cost']
+    for col in numeric_cols:
+        if df_cleaned[col].dtype == object:
+            # Xử lý nếu cột có dấu phẩy ngăn cách hàng nghìn hoặc ký tự tiền tệ
+            df_cleaned[col] = df_cleaned[col].astype(str).str.replace(',', '').str.replace('$', '')
+        df_cleaned[col] = pd.to_numeric(df_cleaned[col], errors='coerce')
+        df_cleaned[col] = df_cleaned[col].fillna(0)
+        
+    # 3.4. Tính toán Delivery Days, Order Year, Order Month nếu chưa có
+    df_cleaned['Delivery Days'] = (df_cleaned['Ship Date'] - df_cleaned['Order Date']).dt.days
+    df_cleaned['Order Year'] = df_cleaned['Order Date'].dt.year.astype(int)
+    df_cleaned['Order Month'] = df_cleaned['Order Date'].dt.month.astype(int)
+    df_cleaned['Year-Month'] = df_cleaned['Order Date'].dt.to_period('M').astype(str)
+    
+    # Feature Engineering (Step 4): Profit Margin = Profit / Sales
+    df_cleaned['Profit Margin (%)'] = df_cleaned.apply(
+        lambda x: (x['Profit'] / x['Sales'] * 100) if x['Sales'] != 0 else 0, 
+        axis=1
+    )
+    
+    # Chuyển đổi ngày về String ISO để lưu SQLite tốt hơn
+    df_cleaned['Order Date'] = df_cleaned['Order Date'].dt.strftime('%Y-%m-%d')
+    df_cleaned['Ship Date'] = df_cleaned['Ship Date'].dt.strftime('%Y-%m-%d')
+    
+    return df_cleaned
+
+def initialize_database(force_reload=False, uploaded_df=None):
+    """
+    Khởi tạo cơ sở dữ liệu SQLite từ DataFrame hoặc file CSV.
+    Thực thi theo SOP Bước 1, 2, 3.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -35,41 +95,26 @@ def initialize_database():
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='orders'")
         table_exists = cursor.fetchone()
         
-        if not table_exists:
-            print("Đang khởi tạo cơ sở dữ liệu SQLite từ file CSV...")
-            file_path = get_active_dataset_path()
+        if not table_exists or force_reload:
+            print("🚀 Bắt đầu khởi tạo cơ sở dữ liệu SQLite theo quy trình chuẩn SOP...")
             
-            # Đọc dữ liệu gốc
-            df = pd.read_csv(file_path, sep=';', encoding='latin1')
-            df = df.dropna()
+            if uploaded_df is not None:
+                df = uploaded_df
+            else:
+                file_path = get_active_dataset_path()
+                # BƯỚC 1: Đọc file
+                try:
+                    df = pd.read_csv(file_path, sep=';', encoding='latin1')
+                except Exception:
+                    df = pd.read_csv(file_path, sep=',', encoding='latin1') # Fallback
             
-            # Loại bỏ các cột trùng tên viết thường nếu có sẵn trong CSV để tránh lỗi case-insensitive của SQLite
-            if 'order year' in df.columns:
-                df = df.drop(columns=['order year'])
-            if 'order month' in df.columns:
-                df = df.drop(columns=['order month'])
+            # BƯỚC 2 & 3: Làm sạch và Kiểm định dữ liệu chặt chẽ theo SOP
+            df_final = validate_and_clean_sop(df)
             
-            # Làm sạch và định dạng ngày tháng trong pandas
-            df['Order Date'] = pd.to_datetime(df['Order Date'], dayfirst=True, errors='coerce')
-            df['Ship Date'] = pd.to_datetime(df['Ship Date'], dayfirst=True, errors='coerce')
-            df = df.dropna(subset=['Order Date'])
-            
-            # Feature Engineering: Tính Profit Margin (%)
-            df['Profit Margin (%)'] = (df['Profit'] / df['Sales']) * 100
-            df['Profit Margin (%)'] = df['Profit Margin (%)'].fillna(0)
-            
-            # Tách năm, tháng
-            df['Order Year'] = df['Order Date'].dt.year.astype(int)
-            df['Order Month'] = df['Order Date'].dt.month.astype(int)
-            df['Year-Month'] = df['Order Date'].dt.to_period('M').astype(str)
-            
-            # Chuyển đổi Ngày tháng thành chuỗi định dạng chuẩn để SQLite lưu trữ tốt
-            df['Order Date'] = df['Order Date'].dt.strftime('%Y-%m-%d')
-            df['Ship Date'] = df['Ship Date'].dt.strftime('%Y-%m-%d')
-            
-            # Lưu vào SQLite
-            df.to_sql('orders', conn, if_exists='replace', index=False)
-            print("Đã khởi tạo SQLite thành công.")
+            # BƯỚC 4: Flag Outliers & Lưu vào SQLite
+            df_final = flag_outliers(df_final)
+            df_final.to_sql('orders', conn, if_exists='replace', index=False)
+            print(f"✅ Đã khởi tạo SQLite thành công với {len(df_final)} dòng dữ liệu.")
     finally:
         conn.close()
 
@@ -81,53 +126,11 @@ def load_and_clean_data(file_path=None):
     df = pd.read_sql_query("SELECT * FROM orders", conn)
     conn.close()
     
-    # Ép kiểu ngược lại về datetime cho các trường ngày tháng nếu có tồn tại trong dữ liệu mới
+    # Ép kiểu ngược lại về datetime
     for col in ['Order Date', 'Ship Date']:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors='coerce')
             
-    # --- Centralized Schema Safeguards ---
-    # Đảm bảo có Order Year
-    if 'Order Year' not in df.columns:
-        col_map = detect_standard_columns(df)
-        date_col = col_map['Order Date']
-        if date_col and date_col in df.columns:
-            try:
-                df['Order Year'] = pd.to_datetime(df[date_col], errors='coerce').dt.year.fillna(2026).astype(int)
-            except Exception:
-                df['Order Year'] = 2026
-        else:
-            df['Order Year'] = 2026
-            
-    # Đảm bảo có Region (Khu vực)
-    if 'Region' not in df.columns:
-        geo_candidates = ['Region', 'region', 'Country', 'country', 'City', 'city', 'Thị trường', 'Khu vực']
-        geo_col = None
-        for c in geo_candidates:
-            if c in df.columns:
-                geo_col = c
-                break
-        if geo_col:
-            df['Region'] = df[geo_col]
-        else:
-            df['Region'] = 'All Regions'
-            
-    # Đảm bảo có Segment (Phân khúc)
-    if 'Segment' not in df.columns:
-        df['Segment'] = 'All Customers'
-        
-    # Đảm bảo có Customer Name (Tên khách hàng)
-    if 'Customer Name' not in df.columns:
-        col_map = detect_standard_columns(df)
-        cust_col = col_map['Customer ID']
-        if cust_col and cust_col in df.columns:
-            df['Customer Name'] = df[cust_col]
-        else:
-            df['Customer Name'] = 'Unknown Customer'
-    
-    # Phát hiện ngoại lai để đảm bảo luôn có cột Is_Outlier cho tính toán loại bỏ ngoại lai
-    df = flag_outliers(df)
-    
     return df
 
 def detect_standard_columns(df):
