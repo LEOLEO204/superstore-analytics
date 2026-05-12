@@ -44,6 +44,17 @@ def validate_and_clean_sop(df):
     
     df_cleaned = df.copy()
     
+    # TRÁNH LỖI DUPLICATE COLUMN (CASE-INSENSITIVE): Xóa mọi cột sinh tự động (dù viết hoa hay thường) có sẵn trong file
+    auto_generated_cols = ['delivery days', 'order year', 'order month', 'year-month', 'profit margin (%)', 'is_outlier']
+    
+    # Tìm chính xác các cột trong dataframe trùng khớp (không phân biệt hoa thường)
+    cols_to_drop = [
+        c for c in df_cleaned.columns 
+        if c.lower() in auto_generated_cols
+    ]
+    if cols_to_drop:
+        df_cleaned = df_cleaned.drop(columns=cols_to_drop)
+
     # --- BƯỚC 3: LÀM SẠCH DỮ LIỆU ---
     # 3.1. Xóa dòng trống
     df_cleaned = df_cleaned.dropna(subset=['Order ID', 'Order Date', 'Sales', 'Profit'])
