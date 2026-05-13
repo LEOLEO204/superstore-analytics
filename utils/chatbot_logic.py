@@ -3,6 +3,91 @@ import numpy as np
 import re
 from utils.i18n import t
 
+def call_llm_fallback(prompt, df, rfm_df=None):
+    """
+    Bộ não AI Dự phòng Tối cao (High-Performance AI Fallback Brain)
+    Tự động kết nối Groq Llama-3.3 để phân tích ngẫu hứng mọi câu hỏi nằm ngoài bộ quy tắc chuẩn.
+    Cung cấp ngữ cảnh tóm tắt dữ liệu thực tế để AI trả lời thông minh và sát thực nhất.
+    """
+    import os
+    import streamlit as st
+    from dotenv import load_dotenv
+    from langchain_groq import ChatGroq
+    
+    load_dotenv(override=True)
+    try:
+        api_key = st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY"))
+    except Exception:
+        api_key = os.environ.get("GROQ_API_KEY")
+        
+    # Nếu tuyệt đối không tìm thấy API Key hoặc là key rác mặc định
+    if not api_key or api_key == "your_google_api_key_here" or len(api_key) < 20:
+        return (
+            "🤖 **Trợ lý Siêu Thị (Rule-based)**:\n\n"
+            "Em chưa nhận diện được câu hỏi này. Để em trả lời thông minh bất kỳ câu hỏi nào, bạn vui lòng cấu hình API Key hợp lệ trong file `.env` nhé!\n\n"
+            "Hiện tại bạn có thể gõ: \"*Doanh thu*\", \"*Lợi nhuận*\", \"*Khách hàng*\", \"*Vận chuyển*\"."
+        )
+        
+    try:
+        # Nhận dạng cột an toàn
+        sales_col = 'Sales' if 'Sales' in df.columns else df.select_dtypes(include=['number']).columns[0]
+        profit_col = 'Profit' if 'Profit' in df.columns else df.select_dtypes(include=['number']).columns[1]
+        
+        # Thống kê nền tảng để truyền vào ngữ cảnh (Context-injection)
+        tot_sales = df[sales_col].sum()
+        tot_profit = df[profit_col].sum()
+        tot_rows = len(df)
+        tot_orders = df['Order ID'].nunique() if 'Order ID' in df.columns else len(df)
+        tot_custs = df['Customer ID'].nunique() if 'Customer ID' in df.columns else 'N/A'
+        
+        # Thống kê chi tiết dạng văn bản gọn nhẹ
+        cat_sum = df.groupby('Category')[[sales_col, profit_col]].sum().sort_values(by=sales_col, ascending=False).to_markdown() if 'Category' in df.columns else "Không có dữ liệu Category"
+        reg_sum = df.groupby('Region')[[sales_col, profit_col]].sum().sort_values(by=sales_col, ascending=False).to_markdown() if 'Region' in df.columns else "Không có dữ liệu Region"
+        
+        system_prompt = f"""
+Bạn là Trợ lý Phân tích Kinh doanh Superstore AI chuyên nghiệp và tinh tế.
+Dưới đây là NGỮ CẢNH THỰC TẾ tổng hợp từ tập dữ liệu hiện tại đang tải lên hệ thống:
+
+### CHỈ SỐ TOÀN HỆ THỐNG:
+- Tổng doanh số kinh doanh: ${tot_sales:,.2f}
+- Tổng lợi nhuận ròng: ${tot_profit:,.2f}
+- Biên lợi nhuận thực đạt: {(tot_profit/tot_sales*100):.2f}%
+- Số giao dịch ghi nhận: {tot_rows:,} dòng
+- Số lượng đơn hàng độc bản: {tot_orders:,} đơn
+- Tổng số lượng khách hàng: {tot_custs}
+
+### THỐNG KÊ DOANH THU & LỢI NHUẬN THEO DANH MỤC:
+{cat_sum}
+
+### THỐNG KÊ THEO KHU VỰC ĐỊA LÝ (REGION):
+{reg_sum}
+
+NHIỆM VỤ CỦA BẠN:
+Hãy sử dụng thông tin trên để trả lời trực tiếp câu hỏi ngẫu hứng của người dùng. 
+- Bạn PHẢI trả lời bằng Tiếng Việt một cách tự nhiên, lôi cuốn, có phân tích kinh doanh sắc bén.
+- Nếu câu hỏi nằm ngoài các con số trên, hãy suy luận một cách logic nhất dựa trên chuyên môn bán lẻ hoặc lịch sự hướng dẫn họ cách xem trên dashboard.
+- Định dạng câu trả lời Markdown thật chuyên nghiệp, sử dụng Emoji sống động.
+- Câu trả lời cần ngắn gọn, súc tích, tập trung vào bản chất câu hỏi.
+"""
+        # Khởi tạo LLM cực kỳ nhanh và thông minh
+        llm = ChatGroq(
+            model_name="llama-3.3-70b-versatile",
+            api_key=api_key,
+            temperature=0.35,
+            max_retries=2
+        )
+        
+        # Gọi truy vấn
+        user_query = f"{system_prompt}\n\nCÂU HỎI NGƯỜI DÙNG CẦN TRẢ LỜI: \"{prompt}\"\n\nHãy phản hồi ngay:"
+        response = llm.invoke(user_query)
+        return response.content
+        
+    except Exception as e:
+        return (
+            f"🤖 **Bộ não AI đang bận**: Em ghi nhận câu hỏi của bạn là một phân tích nâng cao ngoài tầm quy tắc chuẩn. Tuy nhiên hệ thống đang gặp sự cố kết nối AI: *{str(e)}*.\n\n"
+            "Vui lòng thử lại bằng các câu hỏi mẫu như \"*Doanh thu theo vùng*\", \"*Khách hàng VIP*\"."
+        )
+
 def ask_agent(agent_placeholder, prompt, df=None, rfm_df=None):
     """
     Chatbot hoàn toàn dựa trên Quy tắc (Rule-based) bằng Python theo chuẩn SOP.
@@ -252,16 +337,9 @@ def ask_agent(agent_placeholder, prompt, df=None, rfm_df=None):
             "Bạn cần em tra cứu thông tin nào ngay bây giờ ạ? 😊"
         )
 
-    # 15. FALLBACK KHI KHÔNG HIỂU CÂU HỎI
-    return (
-        "🤖 **Em chưa khớp được quy tắc chuẩn cho câu hỏi này của Anh/Chị.**\n\n"
-        "Để em phân tích chính xác số liệu từ Python, Anh/Chị hãy thử gõ lại cụ thể hơn:\n"
-        "- *\"Có bao nhiêu khách hàng\"*, *\"Top khách hàng mua nhiều nhất\"*\n"
-        "- *\"Doanh thu hệ thống\"*, *\"Doanh thu theo khu vực/nhóm hàng\"*\n"
-        "- *\"Tổng lợi nhuận\"*, *\"Biên lợi nhuận\"*\n"
-        "- *\"Tổng chi phí vận chuyển\"*, *\"Đơn hàng\"*\n"
-        "- *\"Rủi ro rời bỏ\"*, *\"Phân khúc RFM\"*"
-    )
+    # 15. BỘ NÃO AI ĐỰ PHÒNG VẠN NĂNG (LLM FALLBACK)
+    # Khi không có bất kỳ quy tắc tĩnh nào khớp, truyền câu hỏi + ngữ cảnh dữ liệu cho Llama-3.3 thông qua Groq
+    return call_llm_fallback(prompt, df, rfm_df)
 
 def get_ai_agent(df, rfm_df):
     """
