@@ -130,6 +130,23 @@ def ask_agent(agent_placeholder, prompt, df=None, rfm_df=None):
     total_orders = df['Order ID'].nunique() if 'Order ID' in df.columns else len(df)
 
 
+    # =========================================================================
+    # 🧠 BỘ CHUYỂN MẠCH TRÍ TUỆ (SMART BRAIN ROUTER)
+    # Nếu câu hỏi phức tạp (> 6 từ) hoặc chứa các từ khóa lập luận, phân tích sâu,
+    # HỆ THỐNG SẼ BỎ QUA QUY TẮC CỨNG VÀ ĐƯA THẲNG QUA AI CLOUD ĐỂ TRẢ LỜI TỰ NHIÊN!
+    word_count = len(p.split())
+    deep_reasoning_keywords = [
+        "so với", "tại sao", "nhận xét", "đánh giá", "phân tích", "chiến lược", 
+        "giải pháp", "cách nào", "làm sao", "tỷ lệ churn", "mua cách đây", 
+        "nếu", "so sánh", "dự đoán", "xu hướng", "nguyên nhân"
+    ]
+    is_complex_query = word_count > 6 or any(kw in p for kw in deep_reasoning_keywords)
+    
+    if is_complex_query:
+        # Phá vỡ bộ quy tắc, truyền trực tiếp qua LLM Fallback!
+        return call_llm_fallback(prompt, df, rfm_df)
+    # =========================================================================
+
     # 3. TRUY VẤN KHÁCH HÀNG (CUSTOMERS) - TOP PRIORITY MATCH
     if any(kw in p for kw in ["khách hàng tốt nhất", "vip", "mua nhiều nhất", "chi tiêu nhiều nhất"]):
         if rfm_df is not None and not rfm_df.empty:
@@ -155,7 +172,7 @@ def ask_agent(agent_placeholder, prompt, df=None, rfm_df=None):
             
         return "⚠️ Rất tiếc, hệ thống chưa thể phân hạng dữ liệu khách hàng."
 
-    if any(kw in p for kw in ["bao nhiêu khách", "số lượng khách", "tổng số khách", "tổng khách", "khách hàng"]):
+    if any(kw in p for kw in ["bao nhiêu khách", "số lượng khách", "tổng số khách", "tổng khách", "đếm khách"]):
         total_c = 0
         if rfm_df is not None and not rfm_df.empty:
             total_c = len(rfm_df)
@@ -177,7 +194,7 @@ def ask_agent(agent_placeholder, prompt, df=None, rfm_df=None):
             return "❓ Bạn có muốn hỏi về **Số lượng khách hàng** hay **Top khách hàng VIP** không ạ? Hãy hỏi chi tiết hơn một chút nhé!"
 
     # 4. CHI PHÍ VẬN CHUYỂN (SHIPPING COST)
-    if any(kw in p for kw in ["vận chuyển", "ship", "phí ship", "giao hàng"]):
+    if any(kw in p for kw in ["tổng phí ship", "chi phí ship", "phí ship", "phí vận chuyển"]):
         ship_col = 'Shipping Cost' if 'Shipping Cost' in df.columns else None
         if ship_col:
             total_ship = df[ship_col].sum()
@@ -192,7 +209,7 @@ def ask_agent(agent_placeholder, prompt, df=None, rfm_df=None):
         return "⚠️ Tập dữ liệu hiện hành không bao gồm trường dữ liệu 'Shipping Cost'."
 
     # 5. ĐƠN HÀNG VÀ GIAO DỊCH (ORDERS)
-    if any(kw in p for kw in ["bao nhiêu đơn", "đơn hàng", "giao dịch", "số đơn"]):
+    if any(kw in p for kw in ["bao nhiêu đơn", "tổng số đơn", "số lượng đơn", "số đơn"]):
         return (
             f"📦 **THỐNG KÊ ĐƠN HÀNG & GIAO DỊCH**\n\n"
             f"- Tổng số lượng hóa đơn/đơn hàng được chốt: **{total_orders:,}** đơn.\n"
