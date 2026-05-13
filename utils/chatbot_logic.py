@@ -44,18 +44,6 @@ def ask_agent(agent_placeholder, prompt, df=None, rfm_df=None):
     margin = (total_profit / total_sales * 100) if total_sales > 0 else 0
     total_orders = df['Order ID'].nunique() if 'Order ID' in df.columns else len(df)
 
-    # 2. CHÀO HỎI & GIỚI THIỆU (GREETINGS)
-    if any(kw in p for kw in ["chào", "hello", "hi", "bạn là ai", "tên gì", "chức năng", "giúp"]):
-        return (
-            "👋 **Xin chào! Em là Trợ lý Ảo chuyên trách Dữ liệu Superstore.**\n\n"
-            "Em có thể **phân tích tức thời** tập dữ liệu của bạn với các câu hỏi như:\n"
-            "- 👥 **Khách hàng**: \"Có bao nhiêu khách hàng\", \"Top khách hàng tốt nhất\"\n"
-            "- 💰 **Tài chính**: \"Doanh thu hệ thống\", \"Tổng lợi nhuận\", \"Biên lợi nhuận\"\n"
-            "- 🚚 **Vận chuyển**: \"Tổng chi phí vận chuyển\", \"Phí ship trung bình\"\n"
-            "- 📦 **Sản phẩm & Thị trường**: \"Bán chạy nhất\", \"Doanh số thị trường\"\n"
-            "- 🚨 **Rủi ro**: \"Tình hình rời bỏ (Churn Risk)\", \"Phân khúc RFM\"\n\n"
-            "Bạn cần em tra cứu thông tin nào ngay bây giờ ạ? 😊"
-        )
 
     # 3. TRUY VẤN KHÁCH HÀNG (CUSTOMERS) - TOP PRIORITY MATCH
     if any(kw in p for kw in ["khách hàng tốt nhất", "vip", "mua nhiều nhất", "chi tiêu nhiều nhất"]):
@@ -250,7 +238,21 @@ def ask_agent(agent_placeholder, prompt, df=None, rfm_df=None):
                 return "👥 **TỔNG HỢP PHÂN KHÚC KHÁCH HÀNG (RFM):**\n\n" + "\n".join(lines)
         return "⚠️ Phân khúc khách hàng hiện chưa thể hiển thị, vui lòng kiểm tra lại DB."
 
-    # 14. FALLBACK KHI KHÔNG HIỂU CÂU HỎI
+    # 14. CHÀO HỎI & GIỚI THIỆU (GREETINGS) - ĐƯA VỀ DƯỚI CÙNG ĐỂ KHÔNG CƯỚP CÂU HỎI TRUY VẤN
+    # Loại bỏ 'hi' để tránh bắt nhầm substring trong 'bao nhiêu', 'chỉ', 'chi phí'...
+    if any(kw in p for kw in ["chào", "hello", "bạn là ai", "tên gì", "chức năng", "giúp", "xin chào"]):
+        return (
+            "👋 **Xin chào! Em là Trợ lý Ảo chuyên trách Dữ liệu Superstore.**\n\n"
+            "Em có thể **phân tích tức thời** tập dữ liệu của bạn với các câu hỏi như:\n"
+            "- 👥 **Khách hàng**: \"Có bao nhiêu khách hàng\", \"Top khách hàng tốt nhất\"\n"
+            "- 💰 **Tài chính**: \"Doanh thu hệ thống\", \"Tổng lợi nhuận\", \"Biên lợi nhuận\"\n"
+            "- 🚚 **Vận chuyển**: \"Tổng chi phí vận chuyển\", \"Phí ship trung bình\"\n"
+            "- 📦 **Sản phẩm & Thị trường**: \"Bán chạy nhất\", \"Doanh số thị trường\"\n"
+            "- 🚨 **Rủi ro**: \"Tình hình rời bỏ (Churn Risk)\", \"Phân khúc RFM\"\n\n"
+            "Bạn cần em tra cứu thông tin nào ngay bây giờ ạ? 😊"
+        )
+
+    # 15. FALLBACK KHI KHÔNG HIỂU CÂU HỎI
     return (
         "🤖 **Em chưa khớp được quy tắc chuẩn cho câu hỏi này của Anh/Chị.**\n\n"
         "Để em phân tích chính xác số liệu từ Python, Anh/Chị hãy thử gõ lại cụ thể hơn:\n"
