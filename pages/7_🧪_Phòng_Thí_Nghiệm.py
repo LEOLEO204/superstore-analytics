@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 import os
 import plotly.express as px
-from utils.data_processor import detect_standard_columns, calculate_distribution_stats
+from utils.data_processor import detect_standard_columns, calculate_distribution_stats, load_and_clean_data, calculate_rfm
 from utils.auto_analyst import get_automated_dataset_report
 from utils.ui_components import inject_custom_css, render_top_bar, render_page_header
 from utils.i18n import t
@@ -12,10 +12,20 @@ st.set_page_config(page_title="Phòng Thí Nghiệm", page_icon="🧪", layout="
 import importlib
 import utils.ui_components
 importlib.reload(utils.ui_components)
+import utils.chat_widget
+importlib.reload(utils.chat_widget)
+from utils.chat_widget import render_floating_chat
 from utils.ui_components import check_authentication
 check_authentication("Phòng Thí Nghiệm")
 inject_custom_css()
 render_top_bar()
+
+# Tải trước dữ liệu hệ thống phục vụ Chatbot
+df_system = load_and_clean_data()
+rfm_df_system = calculate_rfm(df_system)
+render_floating_chat(df_system, rfm_df_system)
+st.sidebar.markdown("---")
+st.sidebar.success("🤖 Trợ Lý AI: Đã sẵn sàng trong Lab!")
 
 # CSS bổ sung cho thẻ chỉ số và tiêu đề
 st.markdown("""
@@ -875,3 +885,5 @@ else:
         </p>
     </div>
     """, unsafe_allow_html=True)
+
+# Hoàn tất trang

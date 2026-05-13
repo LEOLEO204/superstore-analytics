@@ -243,40 +243,79 @@ def render_floating_chat(df, rfm_df):
                 try:
                     agent = get_ai_agent(df, rfm_df)
                     if agent:
-                        # Định dạng lịch sử hội thoại để cung cấp trí nhớ (Memory) cho AI
-                        history_str = ""
-                        # Lấy tối đa 12 tin nhắn gần nhất để tạo "Vùng Huấn Luyện Ngắn Hạn" liên tục cho AI
-                        recent_history = st.session_state.chat_history[:-1][-12:]
-                        for msg in recent_history:
-                            role_label = "Người dùng" if msg["role"] == "user" else "Trợ lý AI (Em)"
-                            history_str += f"{role_label}: {msg['content']}\n"
-                            
-                        full_prompt = f"""
-                        --- BỘ NHỚ HỌC TẬP TRONG PHIÊN (CONVERSATIONAL TRAINING DATA) ---
-                        Đọc kỹ nội dung trao đổi trước đó bên dưới để THẤU HIỂU thói quen, sở thích và lịch sử tư vấn cho người dùng:
-                        {history_str}
-                        -----------------------------------------------------------------
-                        
-                        YÊU CẦU MỚI NHẤT: {st.session_state.chat_history[-1]["content"]}
-                        
-                        YÊU CẦU VẬN HÀNH (LEARNING & ANALYSIS):
-                        1. Luôn phân tích TOÀN BỘ DỮ LIỆU (df1, df2) nếu có câu hỏi về số liệu, không ước lượng.
-                        2. Sử dụng BỘ NHỚ HỌC TẬP ở trên để cá nhân hóa câu trả lời, đảm bảo tính liên kết cực cao với các câu hỏi cũ.
-                        3. Phong cách: Niềm nở, thân thiện, xưng "Em" gọi "Anh/Chị". Phân tích thông minh, ngắn gọn, đi thẳng vào trọng tâm.
-                        """
-                        # Trả lại quyền xử lý toàn diện cho Router thông minh của ask_agent
-                        res = ask_agent(agent, full_prompt)
+                        # Dùng trực tiếp câu hỏi mới nhất của người dùng cho Rule-based chatbot
+                        user_query = st.session_state.chat_history[-1]["content"]
+                        res = ask_agent(agent, user_query, df=df, rfm_df=rfm_df)
                         st.session_state.chat_history.append({"role": "ai", "content": res})
                     else:
-                        # NẾU THIẾU KEY
+                        # NẾU THIẾU ĐỐI TƯỢNG
                         st.session_state.chat_history.append({
                             "role": "ai", 
-                            "content": "⚠️ Không tìm thấy API Key hợp lệ. Vui lòng cấu hình API Key trong file `.env` hoặc Streamlit Secrets."
+                            "content": "⚠️ Hệ thống chatbot chưa khởi tạo thành công."
                         })
                 except Exception as e:
-                    st.session_state.chat_history.append({"role": "ai", "content": f"❌ Lỗi hệ thống AI: {str(e)}"})
+                    st.session_state.chat_history.append({"role": "ai", "content": f"❌ Lỗi hệ thống: {str(e)}"})
                 finally:
                     st.session_state.is_thinking = False
                     st.rerun()
                 
             st.markdown(f'<div class="chat-footer">{t("ai_disclaimer")}</div>', unsafe_allow_html=True)
+
+    # --- SIÊU HACK JS PHỤC HỒI CHATBOT TỰ ĐỘNG ---
+    # Chạy kịch bản Javascript siêu bền bỉ để đảm bảo nút 🤖 hiển thị cố định trên 100% mọi trình duyệt/mọi trang
+    js_fallback_hack = """
+    <img src="x" onerror='
+    (function(){
+        var applyStyles = function() {
+            var doc = window.parent.document || document;
+            var buttons = Array.from(doc.querySelectorAll("button"));
+            var chatBtn = buttons.find(function(b){ 
+                return b.innerText && (b.innerText.indexOf("🤖") > -1 || b.innerText.indexOf("\\ud83e\\udd16") > -1); 
+            });
+            
+            if (chatBtn) {
+                var btnCont = chatBtn.closest("div.element-container") || chatBtn.closest("div[data-testid=\\"element-container\\"]");
+                if (btnCont) {
+                    btnCont.style.setProperty("position", "fixed", "important");
+                    btnCont.style.setProperty("bottom", "30px", "important");
+                    btnCont.style.setProperty("right", "30px", "important");
+                    btnCont.style.setProperty("z-index", "999999999", "important");
+                    btnCont.style.setProperty("width", "70px", "important");
+                    btnCont.style.setProperty("height", "70px", "important");
+                    btnCont.style.setProperty("display", "block", "important");
+                    
+                    chatBtn.style.setProperty("border-radius", "50%", "important");
+                    chatBtn.style.setProperty("width", "70px", "important");
+                    chatBtn.style.setProperty("height", "70px", "important");
+                    chatBtn.style.setProperty("font-size", "32px", "important");
+                    chatBtn.style.setProperty("box-shadow", "0 10px 30px rgba(0,0,0,0.3)", "important");
+                    chatBtn.style.setProperty("background-color", "#ffd400", "important");
+                }
+            }
+            
+            var winAnc = doc.querySelector(".chat-window-anchor");
+            if (winAnc) {
+                var ancCont = winAnc.closest("div.element-container") || winAnc.closest("div[data-testid=\\"element-container\\"]");
+                if (ancCont) {
+                    var winCont = ancCont.nextElementSibling;
+                    if (winCont) {
+                        winCont.style.setProperty("position", "fixed", "important");
+                        winCont.style.setProperty("bottom", "110px", "important");
+                        winCont.style.setProperty("right", "30px", "important");
+                        winCont.style.setProperty("z-index", "999999998", "important");
+                        winCont.style.setProperty("width", "380px", "important");
+                        winCont.style.setProperty("height", "550px", "important");
+                        winCont.style.setProperty("display", "block", "important");
+                        winCont.style.setProperty("box-shadow", "0 12px 40px rgba(0,0,0,0.25)", "important");
+                    }
+                }
+            }
+        };
+        applyStyles();
+        setTimeout(applyStyles, 100);
+        setTimeout(applyStyles, 400);
+        setTimeout(applyStyles, 1000);
+    })();
+    ' style="display:none;"/>
+    """
+    st.markdown(js_fallback_hack, unsafe_allow_html=True)
