@@ -47,16 +47,104 @@ def ask_agent(agent_placeholder, prompt, df=None, rfm_df=None):
     # 2. CHÀO HỎI & GIỚI THIỆU (GREETINGS)
     if any(kw in p for kw in ["chào", "hello", "hi", "bạn là ai", "tên gì", "chức năng", "giúp"]):
         return (
-            "👋 **Xin chào! Em là Trợ lý Ảo Rule-based chuyên trách Dữ liệu Superstore.**\n\n"
-            "Em được thiết kế tối ưu bằng Python để **truy vấn dữ liệu tức thời** mà không cần Internet. Anh/Chị có thể hỏi em về:\n"
-            "- 💰 **Doanh thu**: \"Doanh thu hệ thống\", \"Doanh thu theo khu vực/danh mục\"\n"
-            "- 📈 **Lợi nhuận**: \"Tổng lợi nhuận\", \"Biên lợi nhuận\", \"Lợi nhuận theo vùng\"\n"
-            "- 🚨 **Rủi ro Rời bỏ**: \"Tình hình rời bỏ\", \"Customer Churn\", \"Khách hàng nguy cơ\"\n"
-            "- 🏆 **Top Performers**: \"Khu vực tốt nhất\", \"Danh mục bán chạy nhất\"\n\n"
-            "Anh/Chị cần em tra cứu thông tin nào ạ? 😊"
+            "👋 **Xin chào! Em là Trợ lý Ảo chuyên trách Dữ liệu Superstore.**\n\n"
+            "Em có thể **phân tích tức thời** tập dữ liệu của bạn với các câu hỏi như:\n"
+            "- 👥 **Khách hàng**: \"Có bao nhiêu khách hàng\", \"Top khách hàng tốt nhất\"\n"
+            "- 💰 **Tài chính**: \"Doanh thu hệ thống\", \"Tổng lợi nhuận\", \"Biên lợi nhuận\"\n"
+            "- 🚚 **Vận chuyển**: \"Tổng chi phí vận chuyển\", \"Phí ship trung bình\"\n"
+            "- 📦 **Sản phẩm & Thị trường**: \"Bán chạy nhất\", \"Doanh số thị trường\"\n"
+            "- 🚨 **Rủi ro**: \"Tình hình rời bỏ (Churn Risk)\", \"Phân khúc RFM\"\n\n"
+            "Bạn cần em tra cứu thông tin nào ngay bây giờ ạ? 😊"
         )
 
-    # 3. TRUY VẤN CHURN RISK & RỦI RO RỜI BỎ (CUSTOMER CHURN) - KEY SOP REQUIREMENT
+    # 3. TRUY VẤN KHÁCH HÀNG (CUSTOMERS) - TOP PRIORITY MATCH
+    if any(kw in p for kw in ["khách hàng tốt nhất", "vip", "mua nhiều nhất", "chi tiêu nhiều nhất"]):
+        if rfm_df is not None and not rfm_df.empty:
+            # Đảm bảo có cột Customer Name hoặc ID
+            name_col = 'Customer Name' if 'Customer Name' in rfm_df.columns else 'Customer ID'
+            monetary_col = 'Monetary' if 'Monetary' in rfm_df.columns else None
+            
+            if monetary_col:
+                top_custs = rfm_df.sort_values(by=monetary_col, ascending=False).head(5)
+                lines = []
+                for _, row in top_custs.iterrows():
+                    cname = row[name_col]
+                    cval = row[monetary_col]
+                    crisk = row.get('Churn_Risk', 'Hoạt động')
+                    lines.append(f"- **{cname}** (Trạng thái: {crisk}): `${cval:,.2f}`")
+                return "🏆 **TOP 5 KHÁCH HÀNG VIP MANG LẠI DOANH SỐ CAO NHẤT:**\n\n" + "\n".join(lines)
+        
+        # Fallback dùng df gốc nếu rfm_df trống
+        if 'Customer Name' in df.columns and sales_col in df.columns:
+            top_custs = df.groupby('Customer Name')[sales_col].sum().sort_values(ascending=False).head(5)
+            lines = [f"- **{name}**: `${val:,.2f}`" for name, val in top_custs.items()]
+            return "🏆 **TOP 5 KHÁCH HÀNG MUA NHIỀU NHẤT (DỰA TRÊN DOANH THU):**\n\n" + "\n".join(lines)
+            
+        return "⚠️ Rất tiếc, hệ thống chưa thể phân hạng dữ liệu khách hàng."
+
+    if any(kw in p for kw in ["bao nhiêu khách", "số lượng khách", "tổng số khách", "tổng khách", "khách hàng"]):
+        total_c = 0
+        if rfm_df is not None and not rfm_df.empty:
+            total_c = len(rfm_df)
+        elif 'Customer ID' in df.columns:
+            total_c = df['Customer ID'].nunique()
+        elif 'Customer Name' in df.columns:
+            total_c = df['Customer Name'].nunique()
+            
+        if total_c > 0:
+            return (
+                f"👥 **BÁO CÁO SỐ LƯỢNG KHÁCH HÀNG TOÀN HỆ THỐNG**\n\n"
+                f"Hệ thống ghi nhận hiện đang có tổng cộng **{total_c:,}** khách hàng độc bản đã giao dịch.\n\n"
+                f"💡 *Hành động*: Bạn có thể gõ \"*phân khúc*\" để xem chi tiết tình hình RFM hoặc \"*rời bỏ*\" để xem dự báo churn của tệp khách hàng này."
+            )
+        # Nếu chỉ gõ vu vơ "khách hàng", hiển thị phân khúc
+        if "phân khúc" in p or "rfm" in p:
+            pass # Để khối sau xử lý
+        else:
+            return "❓ Bạn có muốn hỏi về **Số lượng khách hàng** hay **Top khách hàng VIP** không ạ? Hãy hỏi chi tiết hơn một chút nhé!"
+
+    # 4. CHI PHÍ VẬN CHUYỂN (SHIPPING COST)
+    if any(kw in p for kw in ["vận chuyển", "ship", "phí ship", "giao hàng"]):
+        ship_col = 'Shipping Cost' if 'Shipping Cost' in df.columns else None
+        if ship_col:
+            total_ship = df[ship_col].sum()
+            avg_ship = df[ship_col].mean()
+            return (
+                f"🚚 **CHI PHÍ VẬN CHUYỂN TÍCH LŨY (SHIPPING)**\n\n"
+                f"- Tổng phí ship toàn bộ đơn hàng: **${total_ship:,.2f}**\n"
+                f"- Phí ship trung bình trên 1 giao dịch: **${avg_ship:,.2f}**\n"
+                f"- Tỷ lệ phí ship / Tổng doanh thu: **{(total_ship/total_sales*100):.2f}%**\n\n"
+                f"💡 *Đánh giá*: Chi phí vận chuyển chiếm tỉ trọng phù hợp so với doanh thu."
+            )
+        return "⚠️ Tập dữ liệu hiện hành không bao gồm trường dữ liệu 'Shipping Cost'."
+
+    # 5. ĐƠN HÀNG VÀ GIAO DỊCH (ORDERS)
+    if any(kw in p for kw in ["bao nhiêu đơn", "đơn hàng", "giao dịch", "số đơn"]):
+        return (
+            f"📦 **THỐNG KÊ ĐƠN HÀNG & GIAO DỊCH**\n\n"
+            f"- Tổng số lượng hóa đơn/đơn hàng được chốt: **{total_orders:,}** đơn.\n"
+            f"- Giá trị doanh thu bình quân mỗi đơn: **${(total_sales/total_orders):,.2f}**.\n"
+            f"- Lợi nhuận ròng bình quân mỗi đơn: **${(total_profit/total_orders):,.2f}**."
+        )
+
+    # 6. THỊ TRƯỜNG (MARKETS)
+    if any(kw in p for kw in ["thị trường", "market"]):
+        if market_col:
+            mkt_sales = df.groupby(market_col)[sales_col].sum().sort_values(ascending=False)
+            lines = [f"- **{mkt}**: `${val:,.2f}`" for mkt, val in mkt_sales.items()]
+            return "🗺️ **DOANH THU CHIA THEO THỊ TRƯỜNG (MARKET):**\n\n" + "\n".join(lines)
+        return "⚠️ Cột dữ liệu Thị trường (Market) không tồn tại."
+
+    # 7. GỢI Ý MUA HÀNG / SẢN PHẨM KÈM (RECOMMENDATIONS)
+    if any(kw in p for kw in ["gợi ý", "mua kèm", "bán kèm", "recommend"]):
+        return (
+            f"💡 **CHIẾN LƯỢC GỢI Ý GIỎ HÀNG PHỔ BIẾN (SOP):**\n\n"
+            f"1. **Nhóm Đồ Nội Thất**: Hãy gợi ý phụ kiện văn phòng đi kèm.\n"
+            f"2. **Nhóm Thiết Bị Công Nghệ**: Hãy đính kèm gói bảo hành mở rộng và phụ kiện dây cáp/giấy in.\n\n"
+            f"Bạn có thể xem bảng gợi ý kết hợp sản phẩm tự động hoàn chỉnh tại menu **🛍️ Gợi Ý Sản Phẩm**!"
+        )
+
+    # 8. TRUY VẤN CHURN RISK & RỦI RO RỜI BỎ (CUSTOMER CHURN)
     if any(kw in p for kw in ["rời bỏ", "churn", "rủi ro", "at risk", "nguy cơ"]):
         if rfm_df is not None and not rfm_df.empty and 'Churn_Risk' in rfm_df.columns:
             counts = rfm_df['Churn_Risk'].value_counts()
@@ -70,117 +158,107 @@ def ask_agent(agent_placeholder, prompt, df=None, rfm_df=None):
             churned_pct = (churned / total * 100) if total > 0 else 0
             
             return (
-                f"🚨 **BÁO CÁO RỦI RO RỜI BỎ (CUSTOMER CHURN ANALYSIS)**\n\n"
-                f"Dựa trên thuật toán phân khúc RFM hiện tại của hệ thống:\n"
+                f"🚨 **BÁO CÁO RỦI RO RỜI BỎ KHÁCH HÀNG (CHURN RISK)**\n\n"
+                f"Phân khúc dựa trên thuật toán RFM cho thấy:\n"
                 f"- 🔥 **Nguy cơ cao (High Risk)**: **{high_risk:,}** khách hàng ({high_risk_pct:.1f}%).\n"
                 f"- 🚪 **Đã rời bỏ (Churned)**: **{churned:,}** khách hàng ({churned_pct:.1f}%).\n"
                 f"- ✅ **An toàn (Active)**: **{active:,}** khách hàng.\n"
                 f"- ⚠️ **Cần chú ý (Needs Attention)**: **{needs_attention:,}** khách hàng.\n\n"
-                f"💡 *Khuyến nghị*: Anh/Chị cần triển khai gấp chương trình ưu đãi đặc biệt cho nhóm **Nguy cơ cao** vì họ là những khách hàng từng chi tiêu rất nhiều nhưng đã lâu không có giao dịch mới."
+                f"💡 *Khuyến nghị*: Tập trung chương trình tri ân cho nhóm **Nguy cơ cao** trước khi họ chuyển hẳn sang đối thủ."
             )
-        return "⚠️ Hiện tại hệ thống chưa thể trích xuất dữ liệu Churn Risk từ RFM."
+        return "⚠️ Dữ liệu RFM hiện chưa có thông tin về Churn Risk."
 
-    # 4. TRUY VẤN BIÊN LỢI NHUẬN (PROFIT MARGIN) - KEY KPI SOP REQUIREMENT
+    # 9. TRUY VẤN BIÊN LỢI NHUẬN (PROFIT MARGIN)
     if any(kw in p for kw in ["biên", "tỷ suất", "tỷ lệ lợi nhuận", "margin"]):
         return (
-            f"📊 **BIÊN LỢI NHUẬN (PROFIT MARGIN) TOÀN HỆ THỐNG**\n\n"
-            f"- ⚙️ **Công thức tính chuẩn SOP**: `Profit Margin = (Total Profit / Total Sales) * 100`\n"
-            f"- 💰 **Tổng Lợi nhuận**: `${total_profit:,.2f}`\n"
-            f"- 📈 **Tổng Doanh thu**: `${total_sales:,.2f}`\n"
-            f"- 🎯 **Kết quả Biên lợi nhuận**: **{margin:.2f}%**\n\n"
-            f"Chỉ số này phản ánh cứ mỗi 100$ doanh thu mang lại, siêu thị giữ lại được **{margin:.2f}$** lợi nhuận sau khi trừ đi chi phí vốn và chi phí vận hành."
+            f"📊 **BIÊN LỢI NHUẬN TOÀN HỆ THỐNG**\n\n"
+            f"- 🛠️ **Công thức**: `Profit Margin = (Lợi nhuận / Doanh thu) * 100`\n"
+            f"- 💰 **Lợi nhuận ròng**: `${total_profit:,.2f}`\n"
+            f"- 📈 **Doanh thu gộp**: `${total_sales:,.2f}`\n"
+            f"- 🎯 **Biên lợi nhuận**: **{margin:.2f}%**\n\n"
+            f"Trung bình mỗi 100$ doanh thu đem về cho siêu thị **{margin:.2f}$** tiền lời ròng."
         )
 
-    # 5. TRUY VẤN DOANH THU (SALES)
+    # 10. TRUY VẤN DOANH THU (SALES)
     if any(kw in p for kw in ["doanh thu", "doanh số", "bán được"]):
-        # Phân tích theo Khu vực
         if any(kw in p for kw in ["khu vực", "vùng"]):
             if region_col:
                 reg_sales = df.groupby(region_col)[sales_col].sum().sort_values(ascending=False)
                 lines = [f"- **{reg}**: `${val:,.2f}`" for reg, val in reg_sales.items()]
                 return "🌍 **DOANH THU THEO KHU VỰC (REGION):**\n\n" + "\n".join(lines)
-        # Phân tích theo Danh mục
-        if any(kw in p for kw in ["danh mục", "sản phẩm"]):
+        if any(kw in p for kw in ["danh mục", "sản phẩm", "nhóm hàng"]):
             if category_col:
                 cat_sales = df.groupby(category_col)[sales_col].sum().sort_values(ascending=False)
                 lines = [f"- **{cat}**: `${val:,.2f}`" for cat, val in cat_sales.items()]
                 return "📦 **DOANH THU THEO DANH MỤC (CATEGORY):**\n\n" + "\n".join(lines)
-        # Tổng Doanh thu
         return (
             f"💰 **TỔNG DOANH THU HỆ THỐNG**\n\n"
-            f"- Tổng doanh số tích lũy: **${total_sales:,.2f}**\n"
-            f"- Tổng số đơn giao dịch thành công: **{total_orders:,}** đơn hàng.\n"
-            f"- Trung bình mỗi đơn hàng đạt: **${(total_sales/total_orders):,.2f}**."
+            f"- Doanh thu tích lũy: **${total_sales:,.2f}**\n"
+            f"- Tổng số đơn hàng hoàn tất: **{total_orders:,}** đơn.\n"
+            f"- Doanh thu bình quân mỗi đơn: **${(total_sales/total_orders):,.2f}**."
         )
 
-    # 6. TRUY VẤN LỢI NHUẬN (PROFIT)
+    # 11. TRUY VẤN LỢI NHUẬN (PROFIT)
     if any(kw in p for kw in ["lợi nhuận", "lãi", "lỗ"]):
-        # Phân tích theo Khu vực
         if any(kw in p for kw in ["khu vực", "vùng"]):
             if region_col:
                 reg_profit = df.groupby(region_col)[profit_col].sum().sort_values(ascending=False)
                 lines = [f"- **{reg}**: `${val:,.2f}`" for reg, val in reg_profit.items()]
                 return "🌍 **LỢI NHUẬN THEO KHU VỰC (REGION):**\n\n" + "\n".join(lines)
-        # Phân tích theo Danh mục
-        if any(kw in p for kw in ["danh mục", "sản phẩm"]):
+        if any(kw in p for kw in ["danh mục", "sản phẩm", "nhóm hàng"]):
             if category_col:
                 cat_profit = df.groupby(category_col)[profit_col].sum().sort_values(ascending=False)
                 lines = [f"- **{cat}**: `${val:,.2f}`" for cat, val in cat_profit.items()]
                 return "📦 **LỢI NHUẬN THEO DANH MỤC (CATEGORY):**\n\n" + "\n".join(lines)
-        # Tổng Lợi nhuận
         return (
-            f"📈 **TỔNG LỢI NHUẬN TOÀN HỆ THỐNG**\n\n"
-            f"- Tổng lợi nhuận ròng: **${total_profit:,.2f}**\n"
-            f"- Biên lợi nhuận trung bình: **{margin:.2f}%**\n"
-            f"- Trạng thái kinh doanh: **{'CÓ LÃI ✅' if total_profit > 0 else 'LỖ VỐN ❌'}**."
+            f"📈 **TỔNG LỢI NHUẬN HỆ THỐNG**\n\n"
+            f"- Lợi nhuận ròng tích lũy: **${total_profit:,.2f}**\n"
+            f"- Biên lợi nhuận thực tế: **{margin:.2f}%**\n"
+            f"- Đánh giá hiệu năng: **{'VẬN HÀNH CÓ LÃI ✅' if total_profit > 0 else 'THUA LỖ CỤC BỘ ❌'}**."
         )
 
-    # 7. TOP PERFORMERS (TỐT NHẤT / TỆ NHẤT)
+    # 12. TOP PERFORMERS (TỐT NHẤT / TỆ NHẤT)
     if any(kw in p for kw in ["tốt nhất", "cao nhất", "bán chạy", "nhiều nhất"]):
-        if region_col:
-            best_reg = df.groupby(region_col)[sales_col].sum().idxmax()
-            best_reg_val = df.groupby(region_col)[sales_col].sum().max()
-        if category_col:
-            best_cat = df.groupby(category_col)[sales_col].sum().idxmax()
-            best_cat_val = df.groupby(category_col)[sales_col].sum().max()
+        best_reg = df.groupby(region_col)[sales_col].sum().idxmax() if region_col else "N/A"
+        best_reg_val = df.groupby(region_col)[sales_col].sum().max() if region_col else 0
+        best_cat = df.groupby(category_col)[sales_col].sum().idxmax() if category_col else "N/A"
+        best_cat_val = df.groupby(category_col)[sales_col].sum().max() if category_col else 0
         return (
-            f"🏆 **BÁO CÁO HIỆU SUẤT TỐT NHẤT (TOP PERFORMERS)**\n\n"
-            f"- 🌍 Khu vực doanh thu lớn nhất: **{best_reg}** (${best_reg_val:,.2f})\n"
-            f"- 📦 Danh mục sản phẩm bán chạy nhất: **{best_cat}** (${best_cat_val:,.2f})"
+            f"🏆 **BÁO CÁO HIỆU SUẤT VƯỢT TRỘI (TOP PERFORMERS)**\n\n"
+            f"- 🌍 Khu vực mang lại doanh thu lớn nhất: **{best_reg}** (${best_reg_val:,.2f})\n"
+            f"- 📦 Nhóm hàng được mua sắm nhiều nhất: **{best_cat}** (${best_cat_val:,.2f})"
         )
 
     if any(kw in p for kw in ["thấp nhất", "kém nhất", "lỗ nhất", "ít nhất"]):
-        if region_col:
-            worst_reg = df.groupby(region_col)[profit_col].sum().idxmin()
-            worst_reg_val = df.groupby(region_col)[profit_col].sum().min()
-        if category_col:
-            worst_cat = df.groupby(category_col)[profit_col].sum().idxmin()
-            worst_cat_val = df.groupby(category_col)[profit_col].sum().min()
+        worst_reg = df.groupby(region_col)[profit_col].sum().idxmin() if region_col else "N/A"
+        worst_reg_val = df.groupby(region_col)[profit_col].sum().min() if region_col else 0
+        worst_cat = df.groupby(category_col)[profit_col].sum().idxmin() if category_col else "N/A"
+        worst_cat_val = df.groupby(category_col)[profit_col].sum().min() if category_col else 0
         return (
-            f"⚠️ **BÁO CÁO KHU VỰC & SẢN PHẨM KÉM HIỆU QUẢ**\n\n"
+            f"⚠️ **CẢNH BÁO HIỆU SUẤT KÉM**\n\n"
             f"- 🌍 Khu vực lợi nhuận thấp nhất: **{worst_reg}** (${worst_reg_val:,.2f})\n"
-            f"- 📦 Danh mục sản phẩm lỗ nhất: **{worst_cat}** (${worst_cat_val:,.2f})"
+            f"- 📦 Nhóm hàng lỗ vốn nặng nhất: **{worst_cat}** (${worst_cat_val:,.2f})"
         )
 
-    # 8. TRUY VẤN PHÂN KHÚC KHÁCH HÀNG (RFM)
-    if "rfm" in p or "phân khúc" in p:
+    # 13. PHÂN KHÚC KHÁCH HÀNG (RFM SEGMENTS)
+    if any(kw in p for kw in ["rfm", "phân khúc"]):
         if rfm_df is not None and not rfm_df.empty:
-            # Tìm cột Segment trong RFM
             seg_col = 'RFM_Segment' if 'RFM_Segment' in rfm_df.columns else 'Segment' if 'Segment' in rfm_df.columns else None
             if seg_col:
                 counts = rfm_df[seg_col].value_counts()
                 lines = [f"- **{seg}**: **{cnt:,}** khách hàng" for seg, cnt in counts.items()]
-                return "👥 **PHÂN PHỐI PHÂN KHÚC KHÁCH HÀNG (RFM):**\n\n" + "\n".join(lines)
-        return "⚠️ Hiện tại dữ liệu phân khúc khách hàng chưa được nạp đầy đủ."
+                return "👥 **TỔNG HỢP PHÂN KHÚC KHÁCH HÀNG (RFM):**\n\n" + "\n".join(lines)
+        return "⚠️ Phân khúc khách hàng hiện chưa thể hiển thị, vui lòng kiểm tra lại DB."
 
-    # 9. FALLBACK KHI KHÔNG HIỂU CÂU HỎI
+    # 14. FALLBACK KHI KHÔNG HIỂU CÂU HỎI
     return (
-        "🤖 **Xin lỗi, em chưa thể tìm ra câu trả lời cho truy vấn này.**\n\n"
-        "Vì em hoạt động theo Quy tắc (Rule-based) chuẩn SOP để đảm bảo tốc độ, xin Anh/Chị thử hỏi lại bằng các từ khóa phổ biến như:\n"
-        "- *\"Doanh thu\"*, *\"Lợi nhuận\"*, *\"Biên lợi nhuận\"*\n"
-        "- *\"Doanh thu theo khu vực/danh mục\"*\n"
-        "- *\"Rủi ro rời bỏ\"*, *\"Churn Risk\"*\n"
-        "- *\"Tốt nhất\"*, *\"Kém nhất\"*"
+        "🤖 **Em chưa khớp được quy tắc chuẩn cho câu hỏi này của Anh/Chị.**\n\n"
+        "Để em phân tích chính xác số liệu từ Python, Anh/Chị hãy thử gõ lại cụ thể hơn:\n"
+        "- *\"Có bao nhiêu khách hàng\"*, *\"Top khách hàng mua nhiều nhất\"*\n"
+        "- *\"Doanh thu hệ thống\"*, *\"Doanh thu theo khu vực/nhóm hàng\"*\n"
+        "- *\"Tổng lợi nhuận\"*, *\"Biên lợi nhuận\"*\n"
+        "- *\"Tổng chi phí vận chuyển\"*, *\"Đơn hàng\"*\n"
+        "- *\"Rủi ro rời bỏ\"*, *\"Phân khúc RFM\"*"
     )
 
 def get_ai_agent(df, rfm_df):
