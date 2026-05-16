@@ -1,0 +1,425 @@
+/* --------------------------------------------------
+   🧠 SUPERSTORE ANALYTICS - VUE 3 CORE APPLICATION
+   ES Module, Component-Driven, Pure Vanilla Async/Await
+-------------------------------------------------- */
+
+const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
+
+const app = createApp({
+    setup() {
+        // --- AUTH STATE ---
+        const isAuthenticated = ref(localStorage.getItem('auth_token') !== null);
+        const loginData = reactive({ username: '', password: '' });
+        const isLoading = ref(false);
+        const loginError = ref('');
+
+        // --- UI STATE ---
+        const isDarkTheme = ref(true);
+        const currentTab = ref('overview');
+        const lang = ref('vi');
+        const isDataLoading = ref(false);
+        const searchQuery = ref('');
+
+        // --- DATA STATE ---
+        const filterOptions = reactive({ years: [], regions: [], markets: [] });
+        const selectedFilters = reactive({ years: [], regions: [] });
+        
+        const dashboardData = reactive({
+            kpis: { totalSales: 0, totalProfit: 0, profitMargin: 0, totalOrders: 0, totalQuantity: 0 },
+            monthlyTrends: [],
+            categorySales: [],
+            regionProfit: [],
+            marketSales: [],
+            topProducts: [],
+            transactions: []
+        });
+
+        // --- PERFORMANCE TAB DATA ---
+        const performanceData = reactive({
+            pareto: [],
+            profitMargin: [],
+            geoRevenue: [],
+            subCatSales: []
+        });
+        const selectedDrillRegion = ref('');
+        const drillTransactions = ref([]);
+        const drillData = reactive({ sales: 0, profit: 0, count: 0 });
+
+        // --- AI CHAT STATE ---
+        const isChatOpen = ref(false);
+        const isChatTyping = ref(false);
+        const chatInput = ref('');
+        const chatMessages = ref([]);
+        const chatBody = ref(null);
+
+        // --- HELPER FUNCTIONS ---
+        const formatNumber = (num, decimals = 2) => {
+            if (num === undefined || num === null) return '0';
+            return parseFloat(num).toLocaleString('en-US', {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            });
+        };
+
+        const getTabLabel = (tabKey) => {
+            const mapping = {
+                'overview': 'Tổng Quan',
+                'performance': 'Hiệu Suất Kinh Doanh',
+                'customers': 'Chân Dung Khách Hàng',
+                'shipping': 'Phân Tích Vận Chuyển',
+                'segments': 'Phân Khúc Khách Hàng',
+                'recommendations': 'Gợi Ý Sản Phẩm',
+                'forecast': 'Dự Báo Tương Lai'
+            };
+            return mapping[tabKey] || 'Phân Hệ Mới';
+        };
+
+        // Direct ApexCharts Instances tracking
+        const charts = {};
+
+        const toggleTheme = () => {
+            isDarkTheme.value = !isDarkTheme.value;
+            document.body.className = isDarkTheme.value ? 'dark-theme' : 'light-theme';
+            // Repaint charts with updated theme colors
+            updateAllCharts();
+            setTimeout(refreshIcons, 50);
+        };
+
+        const refreshIcons = () => {
+            nextTick(() => {
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+            });
+        };
+
+        // --- CHART CONFIG GENERATORS ---
+        // 1. Monthly Trend Options
+        const trendChartSeries = computed(() => [
+            { name: 'Doanh Thu', type: 'column', data: dashboardData.monthlyTrends.map(d => d.Sales) },
+            { name: 'Lợi Nhuận', type: 'line', data: dashboardData.monthlyTrends.map(d => d.Profit) }
+        ]);
+
+        const trendChartOptions = computed(() => ({
+            chart: { id: 'trend-chart', toolbar: { show: false }, background: 'transparent' },
+            theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+            colors: ['#3b82f6', '#10b981'],
+            stroke: { width: [0, 3], curve: 'smooth' },
+            labels: dashboardData.monthlyTrends.map(d => d['Year-Month']),
+            plotOptions: { bar: { columnWidth: '50%', borderRadius: 4 } },
+            grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' },
+            legend: { position: 'top' },
+            yaxis: [
+                { title: { text: 'Doanh thu ($)' }, labels: { formatter: val => '$' + formatNumber(val, 0) } },
+                { opposite: true, title: { text: 'Lợi nhuận ($)' }, labels: { formatter: val => '$' + formatNumber(val, 0) } }
+            ]
+        }));
+
+        // 2. Category Donut Options
+        const categoryChartSeries = computed(() => dashboardData.categorySales.map(d => d.sales));
+        const categoryChartOptions = computed(() => ({
+            chart: { id: 'category-chart', background: 'transparent' },
+            theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+            labels: dashboardData.categorySales.map(d => d.category),
+            colors: ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b'],
+            legend: { position: 'bottom' },
+            stroke: { show: false },
+            dataLabels: { enabled: true, formatter: (val, opt) => `${val.toFixed(1)}%` }
+        }));
+
+        // 3. Region Profit Bar Options
+        const regionChartSeries = computed(() => [
+            { name: 'Lợi Nhuận', data: dashboardData.regionProfit.map(d => d.profit) }
+        ]);
+        const regionChartOptions = computed(() => ({
+            chart: { id: 'region-chart', type: 'bar', toolbar: { show: false }, background: 'transparent' },
+            theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+            colors: ['#a855f7'],
+            plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '60%' } },
+            xaxis: { categories: dashboardData.regionProfit.map(d => d.region), labels: { formatter: val => '$' + formatNumber(val, 0) } },
+            grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+        }));
+
+        // 4. Market Sales Bar Options
+        const marketChartSeries = computed(() => [
+            { name: 'Doanh Thu', data: dashboardData.marketSales.map(d => d.sales) }
+        ]);
+        const marketChartOptions = computed(() => ({
+            chart: { id: 'market-chart', type: 'bar', toolbar: { show: false }, background: 'transparent' },
+            theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+            colors: ['#f59e0b'],
+            plotOptions: { bar: { columnWidth: '60%', borderRadius: 4 } },
+            xaxis: { categories: dashboardData.marketSales.map(d => d.market) },
+            yaxis: { labels: { formatter: val => '$' + formatNumber(val, 0) } },
+            grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+        }));
+
+        // 5. Product Best Selling Options
+        const productChartSeries = computed(() => [
+            { name: 'Doanh Thu', data: dashboardData.topProducts.map(d => d.sales).reverse() }
+        ]);
+        const productChartOptions = computed(() => ({
+            chart: { id: 'product-chart', type: 'bar', toolbar: { show: false }, background: 'transparent' },
+            theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+            colors: ['#06b6d4'],
+            plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
+            xaxis: { labels: { formatter: val => '$' + formatNumber(val, 0) } },
+            yaxis: { categories: dashboardData.topProducts.map(d => {
+                const n = d.product;
+                return n.length > 20 ? n.substring(0, 20) + '...' : n;
+            }).reverse() },
+            grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+        }));
+
+        // --- FILTERED TRANSACTIONS ---
+        const filteredTransactions = computed(() => {
+            if (!searchQuery.value) return dashboardData.transactions;
+            const q = searchQuery.value.toLowerCase();
+            return dashboardData.transactions.filter(t => 
+                String(t['Order ID']).toLowerCase().includes(q) ||
+                String(t['Customer Name']).toLowerCase().includes(q) ||
+                String(t['Product Name']).toLowerCase().includes(q) ||
+                String(t['Region']).toLowerCase().includes(q) ||
+                String(t['Category']).toLowerCase().includes(q)
+            );
+        });
+
+        // --- CORE API ACTIONS ---
+        
+        const handleLogin = async () => {
+            isLoading.value = true;
+            loginError.value = '';
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(loginData)
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    localStorage.setItem('auth_token', data.token);
+                    isAuthenticated.value = true;
+                    // Bootstrap main data
+                    await initializeDashboard();
+                } else {
+                    loginError.value = data.detail || 'Đăng nhập không thành công.';
+                }
+            } catch (e) {
+                loginError.value = 'Lỗi kết nối máy chủ API backend.';
+            } finally {
+                isLoading.value = false;
+                refreshIcons();
+            }
+        };
+
+        const handleLogout = () => {
+            localStorage.removeItem('auth_token');
+            isAuthenticated.value = false;
+            refreshIcons();
+        };
+
+        const fetchFilterOptions = async () => {
+            try {
+                const res = await fetch('/api/filters');
+                const data = await res.json();
+                filterOptions.years = data.years;
+                filterOptions.regions = data.regions;
+                filterOptions.markets = data.markets;
+                
+                // Default select top years & all regions
+                if (selectedFilters.years.length === 0) {
+                    selectedFilters.years = data.years;
+                }
+                if (selectedFilters.regions.length === 0) {
+                    selectedFilters.regions = data.regions;
+                }
+            } catch (e) {
+                console.error("Error loading filter options:", e);
+            }
+        };
+
+        const updateAllCharts = () => {
+            nextTick(() => {
+                if (!isAuthenticated.value) return;
+                
+                // Render utility
+                const repaint = (id, elId, series, options) => {
+                    const el = document.getElementById(elId);
+                    if (!el) return;
+                    const fullOpts = { ...options, series: series };
+                    if (charts[id]) {
+                        try {
+                            charts[id].updateOptions(fullOpts, true, true);
+                        } catch (e) {
+                            // Re-create if rendering engine crashed
+                            el.innerHTML = '';
+                            charts[id] = new ApexCharts(el, fullOpts);
+                            charts[id].render();
+                        }
+                    } else {
+                        el.innerHTML = '';
+                        charts[id] = new ApexCharts(el, fullOpts);
+                        charts[id].render();
+                    }
+                };
+
+                // 1. Trend Chart
+                repaint('trend', 'trend-chart-container', trendChartSeries.value, { 
+                    ...trendChartOptions.value, chart: { ...trendChartOptions.value.chart, height: 320 } 
+                });
+
+                // 2. Category Chart
+                repaint('category', 'category-chart-container', categoryChartSeries.value, { 
+                    ...categoryChartOptions.value, chart: { ...categoryChartOptions.value.chart, type: 'donut', height: 300 } 
+                });
+
+                // 3. Region Chart
+                repaint('region', 'region-chart-container', regionChartSeries.value, { 
+                    ...regionChartOptions.value, chart: { ...regionChartOptions.value.chart, height: 300 } 
+                });
+
+                // 4. Market Chart
+                repaint('market', 'market-chart-container', marketChartSeries.value, { 
+                    ...marketChartOptions.value, chart: { ...marketChartOptions.value.chart, height: 300 } 
+                });
+
+                // 5. Product Chart
+                repaint('product', 'product-chart-container', productChartSeries.value, { 
+                    ...productChartOptions.value, chart: { ...productChartOptions.value.chart, height: 300 } 
+                });
+            });
+        };
+
+        const fetchDashboardData = async () => {
+            isDataLoading.value = true;
+            try {
+                const res = await fetch('/api/dashboard/overview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        years: selectedFilters.years,
+                        regions: selectedFilters.regions
+                    })
+                });
+                const data = await res.json();
+                
+                // Populate Data
+                dashboardData.kpis = data.kpis;
+                dashboardData.monthlyTrends = data.monthlyTrends;
+                dashboardData.categorySales = data.categorySales;
+                dashboardData.regionProfit = data.regionProfit;
+                dashboardData.marketSales = data.marketSales;
+                dashboardData.topProducts = data.topProducts;
+                dashboardData.transactions = data.transactions;
+                
+                // Paint UI Charts
+                updateAllCharts();
+            } catch (e) {
+                console.error("Error loading dashboard dataset:", e);
+            } finally {
+                isDataLoading.value = false;
+                refreshIcons();
+            }
+        };
+
+        const initializeDashboard = async () => {
+            await fetchFilterOptions();
+            await fetchDashboardData();
+        };
+
+        // --- CHATBOT ACTIONS ---
+        const toggleChat = () => {
+            isChatOpen.value = !isChatOpen.value;
+            if (isChatOpen.value) {
+                refreshIcons();
+                scrollToBottom();
+            }
+        };
+
+        const scrollToBottom = () => {
+            nextTick(() => {
+                if (chatBody.value) {
+                    chatBody.value.scrollTop = chatBody.value.scrollHeight;
+                }
+            });
+        };
+
+        const renderMarkdown = (text) => {
+            if (!text) return '';
+            // Extremely primitive Markdown to HTML rendering to keep it Zero-Node
+            let html = text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // bold
+                .replace(/\*(.*?)\*/g, '<em>$1</em>') // italic
+                .replace(/`([^`]+)`/g, '<code>$1</code>') // inline code
+                .replace(/^### (.*?)$/gm, '<h3>$1</h3>') // H3
+                .replace(/^## (.*?)$/gm, '<h2>$1</h2>') // H2
+                .replace(/^# (.*?)$/gm, '<h1>$1</h1>') // H1
+                .replace(/^- (.*?)$/gm, '<li>$1</li>'); // bullet list
+            
+            return html;
+        };
+
+        const sendChatMessage = async () => {
+            if (!chatInput.value.trim()) return;
+            
+            const userMsg = chatInput.value;
+            chatMessages.value.push({ role: 'user', content: userMsg });
+            chatInput.value = '';
+            isChatTyping.value = true;
+            scrollToBottom();
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: userMsg, language: lang.value })
+                });
+                const data = await res.json();
+                chatMessages.value.push({ role: 'bot', content: data.response });
+            } catch (e) {
+                chatMessages.value.push({ role: 'bot', content: '⚠️ Rất tiếc, em không thể kết nối với máy chủ API AI lúc này.' });
+            } finally {
+                isChatTyping.value = false;
+                scrollToBottom();
+            }
+        };
+
+        // --- MOUNTED INITIALIZATION ---
+        onMounted(() => {
+            refreshIcons();
+            if (isAuthenticated.value) {
+                initializeDashboard();
+            }
+        });
+
+        // Watch for Tab switching to dynamically repaint DOM or charts
+        watch(currentTab, (newTab) => {
+            refreshIcons();
+            if (newTab === 'overview') {
+                updateAllCharts();
+            }
+        });
+
+        return {
+            // Auth
+            isAuthenticated, loginData, isLoading, loginError, handleLogin, handleLogout,
+            // UI State
+            isDarkTheme, currentTab, lang, isDataLoading, searchQuery, toggleTheme, formatNumber, getTabLabel,
+            // Filters & Data
+            filterOptions, selectedFilters, dashboardData, fetchDashboardData,
+            filteredTransactions,
+            // Chart Option Computed Refs
+            trendChartSeries, trendChartOptions,
+            categoryChartSeries, categoryChartOptions,
+            regionChartSeries, regionChartOptions,
+            marketChartSeries, marketChartOptions,
+            productChartSeries, productChartOptions,
+            // Chat
+            isChatOpen, isChatTyping, chatInput, chatMessages, chatBody,
+            toggleChat, sendChatMessage, renderMarkdown
+        };
+    }
+});
+
+// Mount the app natively (Wrapper discarded for Vanilla Performance)
+app.mount('#app');

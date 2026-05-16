@@ -3,7 +3,7 @@ import numpy as np
 import datetime
 import os
 import sqlite3
-import streamlit as st
+import functools
 
 
 DB_PATH = 'data/superstore.db'
@@ -129,7 +129,7 @@ def initialize_database(force_reload=False, uploaded_df=None):
     finally:
         conn.close()
 
-@st.cache_data(show_spinner=False)
+@functools.lru_cache(maxsize=32)
 def load_and_clean_data(file_path=None):
     initialize_database()
     
