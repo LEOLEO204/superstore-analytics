@@ -966,9 +966,9 @@
                                             <tbody style="font-size: 0.9rem;">
                                                 <tr v-for="stat in edaData.insights.numericStats" :key="stat.column" style="border-bottom: 1px solid var(--border-color);">
                                                     <td style="padding: 12px 15px; font-weight: 600;">{{ stat.column }}</td>
-                                                    <td style="padding: 12px 15px;">{{ stat.min.toLocaleString() }}</td>
-                                                    <td style="padding: 12px 15px; color: #38bdf8; font-weight: 600;">{{ stat.avg.toLocaleString(undefined, {maximumFractionDigits: 2}) }}</td>
-                                                    <td style="padding: 12px 15px;">{{ stat.max.toLocaleString() }}</td>
+                                                    <td style="padding: 12px 15px;">{{ formatNumber(stat.min, 0) }}</td>
+                                                    <td style="padding: 12px 15px; color: #38bdf8; font-weight: 600;">{{ formatNumber(stat.avg, 2) }}</td>
+                                                    <td style="padding: 12px 15px;">{{ formatNumber(stat.max, 0) }}</td>
                                                 </tr>
                                             </tbody>
                                         </table>
