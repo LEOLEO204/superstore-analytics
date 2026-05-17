@@ -265,16 +265,17 @@ const app = createApp({
                     const el = document.getElementById(elId);
                     if (!el) return;
                     const fullOpts = { ...options, series: series };
-                    if (charts[id]) {
+                    if (charts[id] && el.innerHTML.trim() !== '') {
                         try {
                             charts[id].updateOptions(fullOpts, true, true);
                         } catch (e) {
-                            // Re-create if rendering engine crashed
+                            if (charts[id]) charts[id].destroy();
                             el.innerHTML = '';
                             charts[id] = new ApexCharts(el, fullOpts);
                             charts[id].render();
                         }
                     } else {
+                        if (charts[id]) charts[id].destroy();
                         el.innerHTML = '';
                         charts[id] = new ApexCharts(el, fullOpts);
                         charts[id].render();
@@ -338,15 +339,17 @@ const app = createApp({
                     const el = document.getElementById(elId);
                     if (!el) return;
                     const fullOpts = { ...options, series: series };
-                    if (charts[id]) {
+                    if (charts[id] && el.innerHTML.trim() !== '') {
                         try {
                             charts[id].updateOptions(fullOpts, true, true);
                         } catch (e) {
+                            if (charts[id]) charts[id].destroy();
                             el.innerHTML = '';
                             charts[id] = new ApexCharts(el, fullOpts);
                             charts[id].render();
                         }
                     } else {
+                        if (charts[id]) charts[id].destroy();
                         el.innerHTML = '';
                         charts[id] = new ApexCharts(el, fullOpts);
                         charts[id].render();
@@ -464,15 +467,17 @@ const app = createApp({
                     series: series
                 };
                 
-                if (charts['customer-risk']) {
+                if (charts['customer-risk'] && el.innerHTML.trim() !== '') {
                     try {
                         charts['customer-risk'].updateOptions(fullOpts, true, true);
                     } catch (e) {
+                        if (charts['customer-risk']) charts['customer-risk'].destroy();
                         el.innerHTML = '';
                         charts['customer-risk'] = new ApexCharts(el, fullOpts);
                         charts['customer-risk'].render();
                     }
                 } else {
+                    if (charts['customer-risk']) charts['customer-risk'].destroy();
                     el.innerHTML = '';
                     charts['customer-risk'] = new ApexCharts(el, fullOpts);
                     charts['customer-risk'].render();
@@ -514,15 +519,17 @@ const app = createApp({
                     const el = document.getElementById(elId);
                     if (!el) return;
                     const fullOpts = { ...options, series: series };
-                    if (charts[id]) {
+                    if (charts[id] && el.innerHTML.trim() !== '') {
                         try {
                             charts[id].updateOptions(fullOpts, true, true);
                         } catch (e) {
+                            if (charts[id]) charts[id].destroy();
                             el.innerHTML = '';
                             charts[id] = new ApexCharts(el, fullOpts);
                             charts[id].render();
                         }
                     } else {
+                        if (charts[id]) charts[id].destroy();
                         el.innerHTML = '';
                         charts[id] = new ApexCharts(el, fullOpts);
                         charts[id].render();
