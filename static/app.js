@@ -45,6 +45,24 @@ const app = createApp({
         const drillTransactions = ref([]);
         const drillData = reactive({ sales: 0, profit: 0, count: 0 });
 
+        // --- CUSTOMER PORTRAIT (RFM) DATA ---
+        const customerData = reactive({
+            summary: { total: 0, active: 0, attention: 0, highRisk: 0, churned: 0 },
+            riskDistribution: [],
+            customers: []
+        });
+        const customerSearchQuery = ref('');
+        const selectedRiskFilter = ref('');
+        const isCustomerLoading = ref(false);
+
+        // --- SEGMENTS DATA ---
+        const segmentsData = reactive({
+            segmentSales: [],
+            segmentProfit: [],
+            segmentByRegion: [],
+            segmentsList: []
+        });
+
         // --- AI CHAT STATE ---
         const isChatOpen = ref(false);
         const isChatTyping = ref(false);
@@ -290,10 +308,114 @@ const app = createApp({
             });
         };
 
-        const fetchDashboardData = async () => {
+        // --- DRILL DOWN INTERACTIVE CONTROL ---
+        const calculateDrilldown = () => {
+            if (!selectedDrillRegion.value) {
+                drillTransactions.value = [];
+                drillData.sales = 0;
+                drillData.profit = 0;
+                drillData.count = 0;
+                return;
+            }
+            const regionTransactions = dashboardData.transactions.filter(t => t.Region === selectedDrillRegion.value);
+            drillTransactions.value = regionTransactions;
+            
+            const sales = regionTransactions.reduce((acc, t) => acc + (t.Sales || 0), 0);
+            const profit = regionTransactions.reduce((acc, t) => acc + (t.Profit || 0), 0);
+            const count = regionTransactions.length;
+            
+            drillData.sales = sales;
+            drillData.profit = profit;
+            drillData.count = count;
+        };
+
+        // --- PERFORMANCE CHARTS REPAINT ---
+        const updatePerformanceCharts = () => {
+            nextTick(() => {
+                if (!isAuthenticated.value) return;
+                
+                const repaint = (id, elId, series, options) => {
+                    const el = document.getElementById(elId);
+                    if (!el) return;
+                    const fullOpts = { ...options, series: series };
+                    if (charts[id]) {
+                        try {
+                            charts[id].updateOptions(fullOpts, true, true);
+                        } catch (e) {
+                            el.innerHTML = '';
+                            charts[id] = new ApexCharts(el, fullOpts);
+                            charts[id].render();
+                        }
+                    } else {
+                        el.innerHTML = '';
+                        charts[id] = new ApexCharts(el, fullOpts);
+                        charts[id].render();
+                    }
+                };
+
+                // 1. Pareto Chart
+                repaint('pareto', 'pareto-chart-container', [
+                    { name: 'Doanh Thu', type: 'column', data: performanceData.pareto.map(p => p.sales) },
+                    { name: 'Phần Trăm Tích Lũy', type: 'line', data: performanceData.pareto.map(p => p.cumPercent) }
+                ], {
+                    chart: { id: 'pareto-chart', toolbar: { show: false }, background: 'transparent' },
+                    theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                    colors: ['#06b6d4', '#ef4444'],
+                    stroke: { width: [0, 3], curve: 'smooth' },
+                    labels: performanceData.pareto.map(p => p.customer),
+                    plotOptions: { bar: { columnWidth: '60%', borderRadius: 4 } },
+                    grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' },
+                    yaxis: [
+                        { title: { text: 'Doanh thu ($)' }, labels: { formatter: val => '$' + formatNumber(val, 0) } },
+                        { opposite: true, max: 100, title: { text: 'Tích lũy (%)' }, labels: { formatter: val => val.toFixed(0) + '%' } }
+                    ]
+                });
+
+                // 2. Margin Chart
+                repaint('margin', 'margin-chart-container', [
+                    { name: 'Biên Lợi Nhuận (%)', data: performanceData.profitMargin.map(m => m.margin) }
+                ], {
+                    chart: { id: 'margin-chart', type: 'bar', toolbar: { show: false }, background: 'transparent' },
+                    theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                    colors: ['#10b981'],
+                    plotOptions: { bar: { horizontal: false, columnWidth: '50%', borderRadius: 4 } },
+                    xaxis: { categories: performanceData.profitMargin.map(m => m.region) },
+                    yaxis: { labels: { formatter: val => val.toFixed(1) + '%' } },
+                    grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+                });
+
+                // 3. Sub-Category Chart
+                repaint('subcat', 'subcat-chart-container', [
+                    { name: 'Doanh Thu', data: performanceData.subCatSales.map(s => s.sales) }
+                ], {
+                    chart: { id: 'subcat-chart', type: 'bar', toolbar: { show: false }, background: 'transparent' },
+                    theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                    colors: ['#a855f7'],
+                    plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
+                    xaxis: { labels: { formatter: val => '$' + formatNumber(val, 0) } },
+                    yaxis: { categories: performanceData.subCatSales.map(s => s.subCategory) },
+                    grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+                });
+
+                // 4. Geo Revenue Chart
+                repaint('geo', 'geo-chart-container', [
+                    { name: 'Doanh Thu', data: performanceData.geoRevenue.map(g => g.sales) }
+                ], {
+                    chart: { id: 'geo-chart', type: 'bar', toolbar: { show: false }, background: 'transparent' },
+                    theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                    colors: ['#f59e0b'],
+                    plotOptions: { bar: { horizontal: false, columnWidth: '60%', borderRadius: 4 } },
+                    xaxis: { categories: performanceData.geoRevenue.map(g => `${g.market} - ${g.region}`) },
+                    yaxis: { labels: { formatter: val => '$' + formatNumber(val, 0) } },
+                    grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+                });
+            });
+        };
+
+        const fetchPerformanceData = async () => {
             isDataLoading.value = true;
             try {
-                const res = await fetch('/api/dashboard/overview', {
+                const res = await fetch('/api/dashboard/performance', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -302,20 +424,233 @@ const app = createApp({
                     })
                 });
                 const data = await res.json();
+                performanceData.pareto = data.pareto;
+                performanceData.profitMargin = data.profitMargin;
+                performanceData.geoRevenue = data.geoRevenue;
+                performanceData.subCatSales = data.subCatSales;
                 
-                // Populate Data
-                dashboardData.kpis = data.kpis;
-                dashboardData.monthlyTrends = data.monthlyTrends;
-                dashboardData.categorySales = data.categorySales;
-                dashboardData.regionProfit = data.regionProfit;
-                dashboardData.marketSales = data.marketSales;
-                dashboardData.topProducts = data.topProducts;
-                dashboardData.transactions = data.transactions;
-                
-                // Paint UI Charts
-                updateAllCharts();
+                updatePerformanceCharts();
             } catch (e) {
-                console.error("Error loading dashboard dataset:", e);
+                console.error("Error loading performance data:", e);
+            } finally {
+                isDataLoading.value = false;
+                refreshIcons();
+            }
+        };
+
+        // --- CUSTOMER PORTRAIT (RFM) FUNCTIONS ---
+        const updateCustomerCharts = () => {
+            nextTick(() => {
+                if (!isAuthenticated.value) return;
+                
+                const el = document.getElementById('risk-distribution-chart-container');
+                if (!el) return;
+                
+                const series = [
+                    customerData.summary.active,
+                    customerData.summary.attention,
+                    customerData.summary.highRisk,
+                    customerData.summary.churned
+                ];
+                
+                const fullOpts = {
+                    chart: { id: 'customer-risk-chart', type: 'donut', height: 320, background: 'transparent' },
+                    theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                    labels: ['An toàn (Active)', 'Cần chú ý (Needs Attention)', 'Nguy cơ cao (High Risk)', 'Đã rời bỏ (Churned)'],
+                    colors: ['#10b981', '#f59e0b', '#ef4444', '#6b7280'],
+                    legend: { position: 'bottom' },
+                    stroke: { show: false },
+                    dataLabels: { enabled: true, formatter: (val, opt) => `${val.toFixed(1)}%` },
+                    series: series
+                };
+                
+                if (charts['customer-risk']) {
+                    try {
+                        charts['customer-risk'].updateOptions(fullOpts, true, true);
+                    } catch (e) {
+                        el.innerHTML = '';
+                        charts['customer-risk'] = new ApexCharts(el, fullOpts);
+                        charts['customer-risk'].render();
+                    }
+                } else {
+                    el.innerHTML = '';
+                    charts['customer-risk'] = new ApexCharts(el, fullOpts);
+                    charts['customer-risk'].render();
+                }
+            });
+        };
+
+        const fetchCustomerData = async () => {
+            isDataLoading.value = true;
+            try {
+                const res = await fetch('/api/dashboard/customers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        years: selectedFilters.years,
+                        regions: selectedFilters.regions
+                    })
+                });
+                const data = await res.json();
+                customerData.summary = data.summary;
+                customerData.riskDistribution = data.riskDistribution;
+                customerData.customers = data.customers;
+                
+                updateCustomerCharts();
+            } catch (e) {
+                console.error("Error loading customer data:", e);
+            } finally {
+                isDataLoading.value = false;
+                refreshIcons();
+            }
+        };
+
+        // --- SEGMENTS FUNCTIONS ---
+        const updateSegmentsCharts = () => {
+            nextTick(() => {
+                if (!isAuthenticated.value) return;
+                
+                const repaint = (id, elId, series, options) => {
+                    const el = document.getElementById(elId);
+                    if (!el) return;
+                    const fullOpts = { ...options, series: series };
+                    if (charts[id]) {
+                        try {
+                            charts[id].updateOptions(fullOpts, true, true);
+                        } catch (e) {
+                            el.innerHTML = '';
+                            charts[id] = new ApexCharts(el, fullOpts);
+                            charts[id].render();
+                        }
+                    } else {
+                        el.innerHTML = '';
+                        charts[id] = new ApexCharts(el, fullOpts);
+                        charts[id].render();
+                    }
+                };
+
+                // 1. Segment Sales Pie Chart
+                if (document.getElementById('segment-sales-chart-container')) {
+                    repaint('segment-sales', 'segment-sales-chart-container', segmentsData.segmentSales.map(d => d.sales), {
+                        chart: { id: 'segment-sales-chart', type: 'pie', height: 320, background: 'transparent' },
+                        theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                        labels: segmentsData.segmentSales.map(d => d.segment),
+                        colors: ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b'],
+                        legend: { position: 'bottom' },
+                        stroke: { show: false },
+                        dataLabels: { enabled: true, formatter: (val) => `${val.toFixed(1)}%` }
+                    });
+                }
+
+                // 2. Segment Profit Bar Chart
+                if (document.getElementById('segment-profit-chart-container')) {
+                    repaint('segment-profit', 'segment-profit-chart-container', [
+                        { name: 'Lợi Nhuận', data: segmentsData.segmentProfit.map(d => d.profit) }
+                    ], {
+                        chart: { id: 'segment-profit-chart', type: 'bar', toolbar: { show: false }, background: 'transparent' },
+                        theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                        colors: ['#f59e0b'],
+                        plotOptions: { bar: { horizontal: false, columnWidth: '50%', borderRadius: 4 } },
+                        xaxis: { categories: segmentsData.segmentProfit.map(d => d.segment) },
+                        yaxis: { labels: { formatter: val => '$' + formatNumber(val, 0) } },
+                        grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+                    });
+                }
+
+                // 3. Segment by Region Stacked Bar Chart
+                if (document.getElementById('segment-region-chart-container')) {
+                    const regionSeries = segmentsData.segmentsList.map(seg => {
+                        return {
+                            name: seg,
+                            data: segmentsData.segmentByRegion.map(r => r[seg] || 0)
+                        };
+                    });
+                    
+                    repaint('segment-region', 'segment-region-chart-container', regionSeries, {
+                        chart: { id: 'segment-region-chart', type: 'bar', stacked: true, toolbar: { show: false }, background: 'transparent' },
+                        theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                        colors: ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b'],
+                        plotOptions: { bar: { horizontal: false, borderRadius: 2 } },
+                        xaxis: { categories: segmentsData.segmentByRegion.map(r => r.Region) },
+                        yaxis: { labels: { formatter: val => '$' + formatNumber(val, 0) } },
+                        grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+                    });
+                }
+            });
+        };
+
+        const fetchSegmentsData = async () => {
+            isDataLoading.value = true;
+            try {
+                const res = await fetch('/api/dashboard/segments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        years: selectedFilters.years,
+                        regions: selectedFilters.regions
+                    })
+                });
+                const data = await res.json();
+                segmentsData.segmentSales = data.segmentSales;
+                segmentsData.segmentProfit = data.segmentProfit;
+                segmentsData.segmentByRegion = data.segmentByRegion;
+                segmentsData.segmentsList = data.segmentsList;
+                
+                updateSegmentsCharts();
+            } catch (e) {
+                console.error("Error loading segment data:", e);
+            } finally {
+                isDataLoading.value = false;
+                refreshIcons();
+            }
+        };
+
+        const filteredCustomers = computed(() => {
+            let list = customerData.customers;
+            if (customerSearchQuery.value) {
+                const q = customerSearchQuery.value.toLowerCase();
+                list = list.filter(c => 
+                    String(c['Customer Name'] || '').toLowerCase().includes(q) ||
+                    String(c['Customer ID'] || '').toLowerCase().includes(q)
+                );
+            }
+            if (selectedRiskFilter.value) {
+                list = list.filter(c => c.Churn_Risk === selectedRiskFilter.value);
+            }
+            return list;
+        });
+
+        // --- DYNAMIC CENTRALIZED DATA FETCH ---
+        const fetchDashboardData = async () => {
+            isDataLoading.value = true;
+            try {
+                if (currentTab.value === 'overview') {
+                    const res = await fetch('/api/dashboard/overview', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            years: selectedFilters.years,
+                            regions: selectedFilters.regions
+                        })
+                    });
+                    const data = await res.json();
+                    dashboardData.kpis = data.kpis;
+                    dashboardData.monthlyTrends = data.monthlyTrends;
+                    dashboardData.categorySales = data.categorySales;
+                    dashboardData.regionProfit = data.regionProfit;
+                    dashboardData.marketSales = data.marketSales;
+                    dashboardData.topProducts = data.topProducts;
+                    dashboardData.transactions = data.transactions;
+                    updateAllCharts();
+                } else if (currentTab.value === 'performance') {
+                    await fetchPerformanceData();
+                } else if (currentTab.value === 'customers') {
+                    await fetchCustomerData();
+                } else if (currentTab.value === 'segments') {
+                    await fetchSegmentsData();
+                }
+            } catch (e) {
+                console.error("Error loading dataset:", e);
             } finally {
                 isDataLoading.value = false;
                 refreshIcons();
@@ -397,6 +732,12 @@ const app = createApp({
             refreshIcons();
             if (newTab === 'overview') {
                 updateAllCharts();
+            } else if (newTab === 'performance') {
+                fetchPerformanceData();
+            } else if (newTab === 'customers') {
+                fetchCustomerData();
+            } else if (newTab === 'segments') {
+                fetchSegmentsData();
             }
         });
 
@@ -416,7 +757,13 @@ const app = createApp({
             productChartSeries, productChartOptions,
             // Chat
             isChatOpen, isChatTyping, chatInput, chatMessages, chatBody,
-            toggleChat, sendChatMessage, renderMarkdown
+            toggleChat, sendChatMessage, renderMarkdown,
+            // Performance Tab
+            performanceData, selectedDrillRegion, drillTransactions, drillData, calculateDrilldown,
+            // Customers Tab
+            customerData, customerSearchQuery, selectedRiskFilter, filteredCustomers, fetchCustomerData,
+            // Segments Tab
+            segmentsData, fetchSegmentsData
         };
     }
 });

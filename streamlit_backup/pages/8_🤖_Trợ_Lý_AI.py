@@ -2,6 +2,13 @@
 import streamlit as st
 import pandas as pd
 import os
+import os
+import sys
+# Thêm thư mục gốc vào sys.path để có thể import module utils
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, "..", "..")) if "pages" in current_dir else os.path.abspath(os.path.join(current_dir, ".."))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 from utils.data_processor import load_and_clean_data, calculate_rfm
 from utils.chatbot_logic import get_ai_agent, ask_agent
 from utils.chat_widget import render_floating_chat

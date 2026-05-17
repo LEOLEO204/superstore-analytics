@@ -10,15 +10,11 @@ def call_llm_fallback(prompt, df, rfm_df=None):
     Cung cấp ngữ cảnh tóm tắt dữ liệu thực tế để AI trả lời thông minh và sát thực nhất.
     """
     import os
-    import streamlit as st
     from dotenv import load_dotenv
     from langchain_groq import ChatGroq
     
     load_dotenv(override=True)
-    try:
-        api_key = st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY"))
-    except Exception:
-        api_key = os.environ.get("GROQ_API_KEY")
+    api_key = os.environ.get("GROQ_API_KEY")
         
     # Nếu tuyệt đối không tìm thấy API Key hoặc là key rác mặc định
     if not api_key or api_key == "your_google_api_key_here" or len(api_key) < 20:
@@ -98,12 +94,11 @@ def ask_agent(agent_placeholder, prompt, df=None, rfm_df=None):
     Loại bỏ phụ thuộc API bên ngoài, tối ưu tốc độ phản hồi tức thì (<0.01s).
     Hỗ trợ các tham số linh hoạt từ cả chat_widget và trang báo cáo.
     """
-    # Lấy DataFrame trực tiếp từ session_state nếu tham số df/rfm_df truyền vào rỗng
-    import streamlit as st
+    # Lấy DataFrame trực tiếp nếu tham số df/rfm_df truyền vào rỗng
     if df is None:
-        df = st.session_state.get("df_data")
+        pass
     if rfm_df is None:
-        rfm_df = st.session_state.get("rfm_data")
+        pass
         
     # Nếu vẫn không tìm thấy dữ liệu (trường hợp backup khẩn cấp)
     if df is None or df.empty:

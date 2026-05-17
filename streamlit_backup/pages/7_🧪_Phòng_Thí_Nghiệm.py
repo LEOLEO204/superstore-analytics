@@ -3,6 +3,13 @@ import streamlit as st
 import pandas as pd
 import os
 import plotly.express as px
+import os
+import sys
+# Thêm thư mục gốc vào sys.path để có thể import module utils
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, "..", "..")) if "pages" in current_dir else os.path.abspath(os.path.join(current_dir, ".."))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 from utils.data_processor import detect_standard_columns, calculate_distribution_stats, load_and_clean_data, calculate_rfm
 from utils.auto_analyst import get_automated_dataset_report
 from utils.ui_components import inject_custom_css, render_top_bar, render_page_header

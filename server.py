@@ -224,6 +224,107 @@ async def get_chat_response(req: ChatRequest):
     except Exception as e:
         return {"response": f"Xin lỗi, có lỗi phát sinh khi kết nối trí tuệ nhân tạo: {str(e)}"}
 
+@app.post("/api/dashboard/customers")
+async def get_customer_data(req: FilterRequest):
+    df = get_df()
+    
+    all_years = sorted(list(df['Order Year'].unique()))
+    all_regions = list(df['Region'].unique())
+    
+    valid_years = [y for y in req.years if y in all_years] if req.years else all_years
+    valid_regions = [r for r in req.regions if r in all_regions] if req.regions else all_regions
+    
+    df_filtered = df[(df['Order Year'].isin(valid_years)) & (df['Region'].isin(valid_regions))]
+    
+    if len(df_filtered) == 0:
+        return {
+            "summary": {
+                "total": 0,
+                "active": 0,
+                "attention": 0,
+                "highRisk": 0,
+                "churned": 0
+            },
+            "riskDistribution": [],
+            "customers": []
+        }
+        
+    rfm = calculate_rfm(df_filtered)
+    
+    # 1. Summary Stats
+    total = int(rfm['Customer ID'].nunique())
+    active = int((rfm['Churn_Risk'] == 'An toàn (Active)').sum())
+    attention = int((rfm['Churn_Risk'] == 'Cần chú ý (Needs Attention)').sum())
+    high_risk = int((rfm['Churn_Risk'] == 'Nguy cơ cao (High Risk)').sum())
+    churned = int((rfm['Churn_Risk'] == 'Đã rời bỏ (Churned)').sum())
+    
+    # 2. Risk Distribution for Chart
+    risk_dist = [
+        {"status": "An toàn (Active)", "count": active},
+        {"status": "Cần chú ý (Needs Attention)", "count": attention},
+        {"status": "Nguy cơ cao (High Risk)", "count": high_risk},
+        {"status": "Đã rời bỏ (Churned)", "count": churned}
+    ]
+    
+    # 3. Top 50 Customers by Monetary Value
+    top_50 = rfm.sort_values(by='Monetary', ascending=False).head(50)
+    
+    # Convert scores to integers for frontend safety
+    for col in ['R_Score', 'F_Score', 'M_Score']:
+        top_50[col] = top_50[col].astype(int)
+        
+    customers_list = top_50.to_dict(orient='records')
+    
+    return {
+        "summary": {
+            "total": total,
+            "active": active,
+            "attention": attention,
+            "highRisk": high_risk,
+            "churned": churned
+        },
+        "riskDistribution": risk_dist,
+        "customers": customers_list
+    }
+
+@app.post("/api/dashboard/segments")
+async def get_segment_data(filters: FilterRequest):
+    df = get_df()
+    
+    all_years = sorted(list(df['Order Year'].unique()))
+    all_regions = list(df['Region'].unique())
+    
+    valid_years = [y for y in filters.years if y in all_years] if filters.years else all_years
+    valid_regions = [r for r in filters.regions if r in all_regions] if filters.regions else all_regions
+    
+    df_filtered = df[(df['Order Year'].isin(valid_years)) & (df['Region'].isin(valid_regions))].copy()
+    
+    if len(df_filtered) == 0:
+        return {"segmentSales": [], "segmentProfit": [], "segmentByRegion": [], "segmentsList": []}
+        
+    # Segment Sales
+    seg_sales = df_filtered.groupby('Segment')['Sales'].sum().reset_index()
+    segment_sales = [{"segment": str(row['Segment']), "sales": float(row['Sales'])} for _, row in seg_sales.iterrows()]
+    
+    # Segment Profit
+    seg_profit = df_filtered.groupby('Segment')['Profit'].sum().reset_index()
+    segment_profit = [{"segment": str(row['Segment']), "profit": float(row['Profit'])} for _, row in seg_profit.iterrows()]
+    
+    # Segment by Region
+    seg_reg = df_filtered.groupby(['Region', 'Segment'])['Sales'].sum().reset_index()
+    pivot_df = seg_reg.pivot(index='Region', columns='Segment', values='Sales').fillna(0).reset_index()
+    segment_by_region = pivot_df.to_dict(orient='records')
+    
+    # Extract unique segments for charting
+    segments_list = list(df_filtered['Segment'].unique())
+    
+    return {
+        "segmentSales": segment_sales,
+        "segmentProfit": segment_profit,
+        "segmentByRegion": segment_by_region,
+        "segmentsList": segments_list
+    }
+
 # --- SERVE FRONTEND (Zero-Build Setup) ---
 # Ensure directories exist
 os.makedirs("templates", exist_ok=True)
