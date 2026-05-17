@@ -407,6 +407,168 @@ async def get_shipping_data(filters: FilterRequest):
         "performanceByRegion": performance_by_region
     }
 
+@app.post("/api/dashboard/recommendations")
+async def get_recommendations_data(filters: FilterRequest):
+    df = get_df()
+    all_years = sorted(list(df['Order Year'].unique()))
+    all_regions = list(df['Region'].unique())
+    valid_years = [y for y in filters.years if y in all_years] if filters.years else all_years
+    valid_regions = [r for r in filters.regions if r in all_regions] if filters.regions else all_regions
+    
+    df_filtered = df[(df['Order Year'].isin(valid_years)) & (df['Region'].isin(valid_regions))].copy()
+    
+    if len(df_filtered) == 0 or 'Order ID' not in df_filtered.columns or 'Sub-Category' not in df_filtered.columns:
+        return {"heatmap": [], "pairs": [], "uniqueItems": []}
+        
+    order_counts = df_filtered['Order ID'].value_counts()
+    multi_item_orders = order_counts[order_counts > 1].index
+    filtered_orders_df = df_filtered[df_filtered['Order ID'].isin(multi_item_orders)]
+    
+    total_orders = len(multi_item_orders)
+    if total_orders == 0:
+        return {"heatmap": [], "pairs": [], "uniqueItems": []}
+        
+    order_groups = filtered_orders_df.groupby('Order ID')['Sub-Category'].apply(set).tolist()
+    
+    from collections import defaultdict
+    pair_counts = defaultdict(int)
+    item_counts = defaultdict(int)
+    
+    for group in order_groups:
+        items = sorted(list(group))
+        for item in items:
+            item_counts[item] += 1
+        for i in range(len(items)):
+            for j in range(i + 1, len(items)):
+                pair_counts[(items[i], items[j])] += 1
+                
+    pairs_list = []
+    for (item_a, item_b), count in pair_counts.items():
+        support = count / total_orders
+        conf_a_b = count / item_counts[item_a] if item_counts[item_a] > 0 else 0
+        conf_b_a = count / item_counts[item_b] if item_counts[item_b] > 0 else 0
+        pairs_list.append({
+            "itemA": str(item_a),
+            "itemB": str(item_b),
+            "count": int(count),
+            "support": float(support),
+            "confAB": float(conf_a_b),
+            "confBA": float(conf_b_a)
+        })
+        
+    pairs_list = sorted(pairs_list, key=lambda x: x['count'], reverse=True)
+    unique_items = sorted(list(item_counts.keys()))
+    
+    heatmap = []
+    for (item_a, item_b), count in pair_counts.items():
+        heatmap.append({"x": str(item_a), "y": str(item_b), "val": int(count)})
+        heatmap.append({"x": str(item_b), "y": str(item_a), "val": int(count)}) # symmetric
+        
+    for item in unique_items:
+        heatmap.append({"x": str(item), "y": str(item), "val": 0}) # diagonal
+        
+    return {
+        "heatmap": heatmap,
+        "pairs": pairs_list,
+        "uniqueItems": unique_items
+    }
+
+@app.post("/api/dashboard/forecast")
+async def get_forecast_data(filters: FilterRequest):
+    import numpy as np
+    import pandas as pd
+    
+    df = get_df()
+    all_years = sorted(list(df['Order Year'].unique()))
+    all_regions = list(df['Region'].unique())
+    valid_years = [y for y in filters.years if y in all_years] if filters.years else all_years
+    valid_regions = [r for r in filters.regions if r in all_regions] if filters.regions else all_regions
+    
+    df_filtered = df[(df['Order Year'].isin(valid_years)) & (df['Region'].isin(valid_regions))].copy()
+    
+    if len(df_filtered) == 0:
+        return {"actual": [], "forecast": [], "kpis": {}}
+        
+    df_filtered['Year_Month_DT'] = pd.to_datetime(df_filtered['Order Date']).dt.to_period('M')
+    monthly_data = df_filtered.groupby('Year_Month_DT')[['Sales', 'Profit']].sum().reset_index()
+    monthly_data['Year_Month_DT'] = monthly_data['Year_Month_DT'].astype(str)
+    monthly_data = monthly_data.sort_values('Year_Month_DT').reset_index(drop=True)
+    
+    if len(monthly_data) < 12:
+        return {"actual": [], "forecast": [], "kpis": {}}
+        
+    forecast_months = 12
+    x = np.arange(len(monthly_data))
+    y_sales = monthly_data['Sales'].values
+    y_profit = monthly_data['Profit'].values
+    
+    slope_sales, intercept_sales = np.polyfit(x, y_sales, 1)
+    slope_profit, intercept_profit = np.polyfit(x, y_profit, 1)
+    
+    monthly_data['Month_Num'] = pd.to_datetime(monthly_data['Year_Month_DT']).dt.month
+    avg_sales_by_month = monthly_data.groupby('Month_Num')['Sales'].mean()
+    overall_mean_sales = monthly_data['Sales'].mean()
+    seasonal_indices = (avg_sales_by_month / overall_mean_sales).to_dict()
+    
+    future_x = np.arange(len(monthly_data), len(monthly_data) + forecast_months)
+    last_date = pd.to_datetime(monthly_data['Year_Month_DT'].iloc[-1] + "-01")
+    future_dates = [ (last_date + pd.DateOffset(months=i)).strftime('%Y-%m') for i in range(1, forecast_months + 1) ]
+    
+    forecast_sales = []
+    forecast_profit = []
+    lower_bound_sales = []
+    upper_bound_sales = []
+    
+    std_err_sales = float(np.std(y_sales - (slope_sales * x + intercept_sales)))
+    z_score = 1.96 # 95% confidence
+    
+    for i, fx in enumerate(future_x):
+        trend_s = slope_sales * fx + intercept_sales
+        trend_p = slope_profit * fx + intercept_profit
+        
+        f_month = pd.to_datetime(future_dates[i] + "-01").month
+        s_index = seasonal_indices.get(f_month, 1.0)
+        
+        pred_s = max(100.0, trend_s * s_index)
+        pred_p = trend_p * s_index
+        
+        forecast_sales.append(float(pred_s))
+        forecast_profit.append(float(pred_p))
+        lower_bound_sales.append(float(max(0.0, pred_s - z_score * std_err_sales)))
+        upper_bound_sales.append(float(pred_s + z_score * std_err_sales))
+        
+    actual = []
+    for _, row in monthly_data.iterrows():
+        actual.append({
+            "month": str(row['Year_Month_DT']),
+            "sales": float(row['Sales']),
+            "profit": float(row['Profit'])
+        })
+        
+    forecast = []
+    for i in range(forecast_months):
+        forecast.append({
+            "month": str(future_dates[i]),
+            "sales": float(forecast_sales[i]),
+            "profit": float(forecast_profit[i]),
+            "lower": float(lower_bound_sales[i]),
+            "upper": float(upper_bound_sales[i])
+        })
+        
+    growth_rate = float((slope_sales / overall_mean_sales) * 100) if overall_mean_sales > 0 else 0
+    
+    return {
+        "actual": actual,
+        "forecast": forecast,
+        "kpis": {
+            "firstMonthForecast": float(forecast_sales[0]),
+            "totalForecastSales": float(sum(forecast_sales)),
+            "totalForecastProfit": float(sum(forecast_profit)),
+            "growthRate": growth_rate,
+            "startMonth": future_dates[0]
+        }
+    }
+
 # --- SERVE FRONTEND (Zero-Build Setup) ---
 # Ensure directories exist
 os.makedirs("templates", exist_ok=True)

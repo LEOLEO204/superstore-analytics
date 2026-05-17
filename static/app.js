@@ -71,6 +71,21 @@ const app = createApp({
             performanceByRegion: []
         });
 
+        // --- RECOMMENDATIONS DATA ---
+        const recommendationsData = reactive({
+            heatmap: [],
+            pairs: [],
+            uniqueItems: []
+        });
+        const selectedAnchor = ref('');
+
+        // --- FORECAST DATA ---
+        const forecastData = reactive({
+            actual: [],
+            forecast: [],
+            kpis: { firstMonthForecast: 0, totalForecastSales: 0, totalForecastProfit: 0, growthRate: 0, startMonth: '' }
+        });
+
         // --- AI CHAT STATE ---
         const isChatOpen = ref(false);
         const isChatTyping = ref(false);
@@ -750,6 +765,157 @@ const app = createApp({
             }
         };
 
+        // --- RECOMMENDATIONS FUNCTIONS ---
+        const updateRecommendationsCharts = () => {
+            const repaint = (id, elId, series, options) => {
+                const el = document.getElementById(elId);
+                if (!el) return;
+                const fullOpts = { ...options, series: series };
+                if (charts[id] && el.innerHTML.trim() !== '') {
+                    try { charts[id].updateOptions(fullOpts, true, true); }
+                    catch (e) { charts[id].destroy(); el.innerHTML = ''; charts[id] = new ApexCharts(el, fullOpts); charts[id].render(); }
+                } else {
+                    if (charts[id]) charts[id].destroy();
+                    el.innerHTML = ''; charts[id] = new ApexCharts(el, fullOpts); charts[id].render();
+                }
+            };
+
+            if (document.getElementById('co-occurrence-heatmap-container')) {
+                // Group heatmap data by 'x'
+                const grouped = {};
+                recommendationsData.heatmap.forEach(d => {
+                    if (!grouped[d.x]) grouped[d.x] = [];
+                    grouped[d.x].push({ x: d.y, y: d.val });
+                });
+                const series = Object.keys(grouped).map(k => ({ name: k, data: grouped[k] }));
+
+                repaint('heatmap', 'co-occurrence-heatmap-container', series, {
+                    chart: { id: 'heatmap-chart', type: 'heatmap', height: 600, background: 'transparent', toolbar: {show: false} },
+                    theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                    colors: ['#0d9488'],
+                    dataLabels: { enabled: false },
+                    grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+                });
+            }
+        };
+
+        const fetchRecommendationsData = async () => {
+            isDataLoading.value = true;
+            try {
+                const res = await fetch('/api/dashboard/recommendations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ years: selectedFilters.years, regions: selectedFilters.regions })
+                });
+                const data = await res.json();
+                recommendationsData.heatmap = data.heatmap;
+                recommendationsData.pairs = data.pairs;
+                recommendationsData.uniqueItems = data.uniqueItems;
+                if (!selectedAnchor.value && data.uniqueItems.length > 0) {
+                    selectedAnchor.value = data.uniqueItems[0];
+                }
+                
+                isDataLoading.value = false;
+                await nextTick();
+                updateRecommendationsCharts();
+            } catch (e) {
+                console.error("Error loading recommendations:", e);
+            } finally {
+                isDataLoading.value = false;
+                refreshIcons();
+            }
+        };
+
+        const filteredComboRecs = computed(() => {
+            if (!selectedAnchor.value) return [];
+            return recommendationsData.pairs.filter(p => p.itemA === selectedAnchor.value || p.itemB === selectedAnchor.value).map(p => {
+                const isA = p.itemA === selectedAnchor.value;
+                return {
+                    suggestedItem: isA ? p.itemB : p.itemA,
+                    count: p.count,
+                    confidence: (isA ? p.confAB : p.confBA) * 100
+                };
+            }).sort((a, b) => b.confidence - a.confidence);
+        });
+
+        // --- FORECAST FUNCTIONS ---
+        const updateForecastCharts = () => {
+            const repaint = (id, elId, series, options) => {
+                const el = document.getElementById(elId);
+                if (!el) return;
+                const fullOpts = { ...options, series: series };
+                if (charts[id] && el.innerHTML.trim() !== '') {
+                    try { charts[id].updateOptions(fullOpts, true, true); }
+                    catch (e) { charts[id].destroy(); el.innerHTML = ''; charts[id] = new ApexCharts(el, fullOpts); charts[id].render(); }
+                } else {
+                    if (charts[id]) charts[id].destroy();
+                    el.innerHTML = ''; charts[id] = new ApexCharts(el, fullOpts); charts[id].render();
+                }
+            };
+
+            if (document.getElementById('forecast-chart-container') && forecastData.actual.length > 0) {
+                // Combine actual and forecast for lines
+                const actualSeries = {
+                    name: 'Doanh Số Thực Tế',
+                    type: 'line',
+                    data: forecastData.actual.map(d => ({ x: d.month, y: d.sales }))
+                };
+                const forecastSeries = {
+                    name: 'Doanh Số Dự Báo',
+                    type: 'line',
+                    data: forecastData.forecast.map(d => ({ x: d.month, y: d.sales }))
+                };
+                
+                // For area (confidence interval), apexcharts uses rangeArea or we can just use regular area
+                // Using two area series for bounds is simpler
+                const upperBound = {
+                    name: 'Cận Trên (95%)',
+                    type: 'line',
+                    data: forecastData.forecast.map(d => ({ x: d.month, y: d.upper }))
+                };
+                const lowerBound = {
+                    name: 'Cận Dưới (95%)',
+                    type: 'line',
+                    data: forecastData.forecast.map(d => ({ x: d.month, y: d.lower }))
+                };
+
+                repaint('forecast-chart', 'forecast-chart-container', [actualSeries, forecastSeries, upperBound, lowerBound], {
+                    chart: { id: 'forecast-line-chart', type: 'line', height: 450, background: 'transparent', toolbar: {show: false} },
+                    theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                    stroke: { width: [3, 3, 1, 1], dashArray: [0, 5, 2, 2] },
+                    colors: ['#3b82f6', '#f59e0b', '#fbbf24', '#fbbf24'],
+                    xaxis: { type: 'category' },
+                    yaxis: { labels: { formatter: val => '$' + formatNumber(val, 0) } },
+                    grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' },
+                    fill: { type: 'solid', opacity: [1, 1, 0.1, 0.1] }
+                });
+            }
+        };
+
+        const fetchForecastData = async () => {
+            isDataLoading.value = true;
+            try {
+                const res = await fetch('/api/dashboard/forecast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ years: selectedFilters.years, regions: selectedFilters.regions })
+                });
+                const data = await res.json();
+                forecastData.actual = data.actual;
+                forecastData.forecast = data.forecast;
+                forecastData.kpis = data.kpis;
+                
+                isDataLoading.value = false;
+                await nextTick();
+                updateForecastCharts();
+            } catch (e) {
+                console.error("Error loading forecast data:", e);
+            } finally {
+                isDataLoading.value = false;
+                refreshIcons();
+            }
+        };
+
         const filteredCustomers = computed(() => {
             let list = customerData.customers;
             if (customerSearchQuery.value) {
@@ -798,6 +964,10 @@ const app = createApp({
                     await fetchSegmentsData();
                 } else if (currentTab.value === 'shipping') {
                     await fetchShippingData();
+                } else if (currentTab.value === 'recommendations') {
+                    await fetchRecommendationsData();
+                } else if (currentTab.value === 'forecast') {
+                    await fetchForecastData();
                 }
             } catch (e) {
                 console.error("Error loading dataset:", e);
@@ -890,6 +1060,10 @@ const app = createApp({
                 fetchSegmentsData();
             } else if (newTab === 'shipping') {
                 fetchShippingData();
+            } else if (newTab === 'recommendations') {
+                fetchRecommendationsData();
+            } else if (newTab === 'forecast') {
+                fetchForecastData();
             }
         });
 
@@ -917,7 +1091,11 @@ const app = createApp({
             // Segments Tab
             segmentsData, fetchSegmentsData,
             // Shipping Tab
-            shippingData, fetchShippingData
+            shippingData, fetchShippingData,
+            // Recommendations Tab
+            recommendationsData, selectedAnchor, filteredComboRecs, fetchRecommendationsData,
+            // Forecast Tab
+            forecastData, fetchForecastData
         };
     }
 });
