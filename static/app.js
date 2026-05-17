@@ -432,6 +432,8 @@ const app = createApp({
                 performanceData.geoRevenue = data.geoRevenue;
                 performanceData.subCatSales = data.subCatSales;
                 
+                isDataLoading.value = false;
+                await nextTick();
                 updatePerformanceCharts();
             } catch (e) {
                 console.error("Error loading performance data:", e);
@@ -501,6 +503,8 @@ const app = createApp({
                 customerData.riskDistribution = data.riskDistribution;
                 customerData.customers = data.customers;
                 
+                isDataLoading.value = false;
+                await nextTick();
                 updateCustomerCharts();
             } catch (e) {
                 console.error("Error loading customer data:", e);
@@ -603,6 +607,8 @@ const app = createApp({
                 segmentsData.segmentByRegion = data.segmentByRegion;
                 segmentsData.segmentsList = data.segmentsList;
                 
+                isDataLoading.value = false;
+                await nextTick();
                 updateSegmentsCharts();
             } catch (e) {
                 console.error("Error loading segment data:", e);
@@ -648,6 +654,9 @@ const app = createApp({
                     dashboardData.marketSales = data.marketSales;
                     dashboardData.topProducts = data.topProducts;
                     dashboardData.transactions = data.transactions;
+                    
+                    isDataLoading.value = false;
+                    await nextTick();
                     updateAllCharts();
                 } else if (currentTab.value === 'performance') {
                     await fetchPerformanceData();
