@@ -1,6 +1,3 @@
-# pyrefly: ignore [missing-import]
-import streamlit as st
-
 translations = {
     "vi": {
         # App.py
@@ -130,6 +127,5 @@ translations = {
     }
 }
 
-def t(key):
-    lang = st.session_state.get("lang", "vi")
-    return translations[lang].get(key, key)
+def t(key, lang="vi"):
+    return translations.get(lang, translations["vi"]).get(key, key)
