@@ -601,12 +601,13 @@ const app = createApp({
                     });
                     
                     repaint('segment-region', 'segment-region-chart-container', regionSeries, {
-                        chart: { id: 'segment-region-chart', type: 'bar', stacked: true, toolbar: { show: false }, background: 'transparent' },
+                        chart: { id: 'segment-region-chart', type: 'bar', stacked: true, stackType: '100%', height: 600, toolbar: { show: false }, background: 'transparent' },
                         theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
                         colors: ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b'],
-                        plotOptions: { bar: { horizontal: false, borderRadius: 2 } },
-                        xaxis: { categories: segmentsData.segmentByRegion.map(r => r.Region) },
-                        yaxis: { labels: { formatter: val => '$' + formatNumber(val, 0) } },
+                        plotOptions: { bar: { horizontal: true, borderRadius: 2 } },
+                        dataLabels: { enabled: false },
+                        xaxis: { categories: segmentsData.segmentByRegion.map(r => r.Region), labels: { formatter: val => val + '%' } },
+                        tooltip: { y: { formatter: val => '$' + formatNumber(val, 0) } },
                         grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
                     });
                 }
