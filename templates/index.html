@@ -616,6 +616,94 @@
                         </div>
                     </div>
 
+                    <!-- 5. SHIPPING TAB VIEW -->
+                    <div v-else-if="currentTab === 'shipping'" class="dashboard-grid animate-fadeIn">
+                        <!-- Overview Insight Header -->
+                        <div class="chart-row full-width">
+                            <div class="insight-banner border-orange" style="background: rgba(245, 158, 11, 0.05); padding: 20px; border-radius: 16px; border: 1px solid rgba(245, 158, 11, 0.15); display: flex; align-items: center; gap: 20px; margin-bottom: 25px;">
+                                <div class="insight-icon" style="background: rgba(245, 158, 11, 0.1); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center;"><i data-lucide="truck" style="width: 24px; height: 24px; color: #f59e0b;"></i></div>
+                                <div class="insight-text">
+                                    <h3 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 4px;">🚚 Phân Tích Hiệu Suất Vận Chuyển & Logistics</h3>
+                                    <p style="font-size: 0.85rem; color: var(--text-muted);">Giám sát chất lượng giao hàng, phân bổ chi phí vận chuyển và đánh giá độ trễ đơn hàng thực tế</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- KPI Metric Cards Grid -->
+                        <div class="metrics-row">
+                            <div class="metric-card border-orange">
+                                <div class="metric-icon"><i data-lucide="clock" style="color: #f59e0b;"></i></div>
+                                <div class="metric-body">
+                                    <h3>Thời gian Giao hàng TB</h3>
+                                    <div class="metric-value">{{ formatNumber(shippingData.summary.avgDeliveryDays, 1) }} ngày</div>
+                                </div>
+                            </div>
+                            <div class="metric-card border-blue">
+                                <div class="metric-icon"><i data-lucide="dollar-sign" style="color: #3b82f6;"></i></div>
+                                <div class="metric-body">
+                                    <h3>Tổng Chi phí Vận chuyển</h3>
+                                    <div class="metric-value">${{ formatNumber(shippingData.summary.totalShippingCost, 0) }}</div>
+                                </div>
+                            </div>
+                            <div class="metric-card border-green">
+                                <div class="metric-icon"><i data-lucide="package-check" style="color: #10b981;"></i></div>
+                                <div class="metric-body">
+                                    <h3>Phí Ship Trung bình / Đơn</h3>
+                                    <div class="metric-value">${{ formatNumber(shippingData.summary.avgShippingCost, 2) }}</div>
+                                </div>
+                            </div>
+                            <div class="metric-card border-red">
+                                <div class="metric-icon"><i data-lucide="percent" style="color: #ef4444;"></i></div>
+                                <div class="metric-body">
+                                    <h3>Tỷ lệ Phí ship / Doanh số</h3>
+                                    <div class="metric-value">{{ formatNumber(shippingData.summary.shippingCostRatio, 2) }}%</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="chart-row two-cols">
+                            <!-- Box Plot -->
+                            <div class="chart-card">
+                                <div class="chart-card-header">
+                                    <h3>📦 Phân phối Thời gian giao hàng theo Phương thức</h3>
+                                </div>
+                                <div class="chart-container">
+                                    <div id="ship-mode-box-chart-container" style="min-height: 320px;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Scatter Plot -->
+                            <div class="chart-card">
+                                <div class="chart-card-header">
+                                    <h3>💸 Tương quan giữa Doanh số và Chi phí Vận chuyển</h3>
+                                </div>
+                                <div class="chart-container">
+                                    <div id="cost-sales-scatter-chart-container" style="min-height: 350px;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bar Charts by Region -->
+                        <div class="chart-row two-cols">
+                            <div class="chart-card">
+                                <div class="chart-card-header">
+                                    <h3>🗺️ Thời gian giao hàng trung bình theo Khu vực</h3>
+                                </div>
+                                <div class="chart-container">
+                                    <div id="ship-region-days-chart-container" style="min-height: 300px;"></div>
+                                </div>
+                            </div>
+                            <div class="chart-card">
+                                <div class="chart-card-header">
+                                    <h3>💰 Chi phí ship trung bình một đơn theo Khu vực</h3>
+                                </div>
+                                <div class="chart-container">
+                                    <div id="ship-region-cost-chart-container" style="min-height: 300px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Unified Dynamic Analytical Placeholder View for Other Tabs -->
                     <div v-else class="dashboard-grid-placeholder animate-fadeIn">
                         <div class="glass-card glow-border flex-center-column placeholder-content" style="background: var(--bg-card); backdrop-filter: var(--card-blur); border: 1px solid var(--border-color); border-radius: 20px; padding: 50px 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; max-width: 600px; margin: 50px auto; box-shadow: var(--shadow-glow);">

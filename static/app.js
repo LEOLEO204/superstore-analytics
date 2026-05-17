@@ -63,6 +63,14 @@ const app = createApp({
             segmentsList: []
         });
 
+        // --- SHIPPING DATA ---
+        const shippingData = reactive({
+            summary: { avgDeliveryDays: 0, totalShippingCost: 0, avgShippingCost: 0, shippingCostRatio: 0 },
+            deliveryByMode: [],
+            costVsSales: [],
+            performanceByRegion: []
+        });
+
         // --- AI CHAT STATE ---
         const isChatOpen = ref(false);
         const isChatTyping = ref(false);
@@ -618,6 +626,130 @@ const app = createApp({
             }
         };
 
+        // --- SHIPPING FUNCTIONS ---
+        const updateShippingCharts = () => {
+            const repaint = (id, elId, series, options) => {
+                const el = document.getElementById(elId);
+                if (!el) return;
+                const fullOpts = { ...options, series: series };
+                if (charts[id] && el.innerHTML.trim() !== '') {
+                    try {
+                        charts[id].updateOptions(fullOpts, true, true);
+                    } catch (e) {
+                        if (charts[id]) charts[id].destroy();
+                        el.innerHTML = '';
+                        charts[id] = new ApexCharts(el, fullOpts);
+                        charts[id].render();
+                    }
+                } else {
+                    if (charts[id]) charts[id].destroy();
+                    el.innerHTML = '';
+                    charts[id] = new ApexCharts(el, fullOpts);
+                    charts[id].render();
+                }
+            };
+
+            // 1. Box Plot: Delivery Days by Ship Mode
+            if (document.getElementById('ship-mode-box-chart-container')) {
+                const boxSeries = [{
+                    type: 'boxPlot',
+                    data: shippingData.deliveryByMode.map(d => ({
+                        x: d.mode,
+                        y: [d.min, d.q1, d.median, d.q3, d.max]
+                    }))
+                }];
+                repaint('ship-mode-box', 'ship-mode-box-chart-container', boxSeries, {
+                    chart: { id: 'ship-mode-box-chart', type: 'boxPlot', height: 320, background: 'transparent', toolbar: {show: false} },
+                    theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                    colors: ['#0ea5e9'],
+                    grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+                });
+            }
+
+            // 2. Scatter Plot: Cost vs Sales
+            if (document.getElementById('cost-sales-scatter-chart-container')) {
+                // Group by priority for color coding
+                const priorityGroups = {};
+                shippingData.costVsSales.forEach(d => {
+                    if (!priorityGroups[d.priority]) priorityGroups[d.priority] = [];
+                    priorityGroups[d.priority].push([d.sales, d.cost]);
+                });
+                
+                const scatterSeries = Object.keys(priorityGroups).map(p => ({
+                    name: p,
+                    data: priorityGroups[p]
+                }));
+
+                repaint('cost-sales-scatter', 'cost-sales-scatter-chart-container', scatterSeries, {
+                    chart: { id: 'cost-sales-scatter-chart', type: 'scatter', height: 350, background: 'transparent', toolbar: {show: false} },
+                    theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                    colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+                    xaxis: { title: { text: 'Doanh Số ($)' }, tickAmount: 5, labels: { formatter: val => '$' + formatNumber(val, 0) } },
+                    yaxis: { title: { text: 'Chi Phí Ship ($)' }, labels: { formatter: val => '$' + formatNumber(val, 0) } },
+                    grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+                });
+            }
+
+            // 3. Bar Chart: Delivery Days by Region
+            if (document.getElementById('ship-region-days-chart-container')) {
+                repaint('ship-region-days', 'ship-region-days-chart-container', [{
+                    name: 'Ngày Giao Trung Bình',
+                    data: shippingData.performanceByRegion.map(d => d.avgDeliveryDays)
+                }], {
+                    chart: { id: 'ship-region-days-chart', type: 'bar', height: 300, background: 'transparent', toolbar: {show: false} },
+                    theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                    colors: ['#f59e0b'],
+                    xaxis: { categories: shippingData.performanceByRegion.map(d => d.region) },
+                    plotOptions: { bar: { borderRadius: 4 } },
+                    grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+                });
+            }
+
+            // 4. Bar Chart: Shipping Cost by Region
+            if (document.getElementById('ship-region-cost-chart-container')) {
+                repaint('ship-region-cost', 'ship-region-cost-chart-container', [{
+                    name: 'Chi Phí Trung Bình',
+                    data: shippingData.performanceByRegion.map(d => d.avgShippingCost)
+                }], {
+                    chart: { id: 'ship-region-cost-chart', type: 'bar', height: 300, background: 'transparent', toolbar: {show: false} },
+                    theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                    colors: ['#0ea5e9'],
+                    xaxis: { categories: shippingData.performanceByRegion.map(d => d.region) },
+                    yaxis: { labels: { formatter: val => '$' + formatNumber(val, 0) } },
+                    plotOptions: { bar: { borderRadius: 4 } },
+                    grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+                });
+            }
+        };
+
+        const fetchShippingData = async () => {
+            isDataLoading.value = true;
+            try {
+                const res = await fetch('/api/dashboard/shipping', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        years: selectedFilters.years,
+                        regions: selectedFilters.regions
+                    })
+                });
+                const data = await res.json();
+                shippingData.summary = data.summary;
+                shippingData.deliveryByMode = data.deliveryByMode;
+                shippingData.costVsSales = data.costVsSales;
+                shippingData.performanceByRegion = data.performanceByRegion;
+                
+                isDataLoading.value = false;
+                await nextTick();
+                updateShippingCharts();
+            } catch (e) {
+                console.error("Error loading shipping data:", e);
+            } finally {
+                isDataLoading.value = false;
+                refreshIcons();
+            }
+        };
+
         const filteredCustomers = computed(() => {
             let list = customerData.customers;
             if (customerSearchQuery.value) {
@@ -664,6 +796,8 @@ const app = createApp({
                     await fetchCustomerData();
                 } else if (currentTab.value === 'segments') {
                     await fetchSegmentsData();
+                } else if (currentTab.value === 'shipping') {
+                    await fetchShippingData();
                 }
             } catch (e) {
                 console.error("Error loading dataset:", e);
@@ -754,6 +888,8 @@ const app = createApp({
                 fetchCustomerData();
             } else if (newTab === 'segments') {
                 fetchSegmentsData();
+            } else if (newTab === 'shipping') {
+                fetchShippingData();
             }
         });
 
@@ -779,7 +915,9 @@ const app = createApp({
             // Customers Tab
             customerData, customerSearchQuery, selectedRiskFilter, filteredCustomers, fetchCustomerData,
             // Segments Tab
-            segmentsData, fetchSegmentsData
+            segmentsData, fetchSegmentsData,
+            // Shipping Tab
+            shippingData, fetchShippingData
         };
     }
 });

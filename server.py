@@ -325,6 +325,88 @@ async def get_segment_data(filters: FilterRequest):
         "segmentsList": segments_list
     }
 
+@app.post("/api/dashboard/shipping")
+async def get_shipping_data(filters: FilterRequest):
+    df = get_df()
+    
+    all_years = sorted(list(df['Order Year'].unique()))
+    all_regions = list(df['Region'].unique())
+    
+    valid_years = [y for y in filters.years if y in all_years] if filters.years else all_years
+    valid_regions = [r for r in filters.regions if r in all_regions] if filters.regions else all_regions
+    
+    df_filtered = df[(df['Order Year'].isin(valid_years)) & (df['Region'].isin(valid_regions))].copy()
+    
+    if len(df_filtered) == 0:
+        return {
+            "summary": {"avgDeliveryDays": 0, "totalShippingCost": 0, "avgShippingCost": 0, "shippingCostRatio": 0},
+            "deliveryByMode": [],
+            "costVsSales": [],
+            "performanceByRegion": []
+        }
+        
+    avg_delivery_days = float(df_filtered['Delivery Days'].mean()) if 'Delivery Days' in df_filtered.columns else 0
+    total_shipping_cost = float(df_filtered['Shipping Cost'].sum()) if 'Shipping Cost' in df_filtered.columns else 0
+    avg_shipping_cost = float(df_filtered['Shipping Cost'].mean()) if 'Shipping Cost' in df_filtered.columns else 0
+    total_sales = float(df_filtered['Sales'].sum()) if 'Sales' in df_filtered.columns else 0
+    shipping_cost_ratio = (total_shipping_cost / total_sales * 100) if total_sales > 0 else 0
+    
+    # 1. Delivery by Mode (Boxplot Quantiles)
+    delivery_by_mode = []
+    if 'Ship Mode' in df_filtered.columns and 'Delivery Days' in df_filtered.columns:
+        for mode in df_filtered['Ship Mode'].unique():
+            mode_data = df_filtered[df_filtered['Ship Mode'] == mode]['Delivery Days'].dropna()
+            if len(mode_data) > 0:
+                delivery_by_mode.append({
+                    "mode": str(mode),
+                    "min": float(mode_data.min()),
+                    "q1": float(mode_data.quantile(0.25)),
+                    "median": float(mode_data.median()),
+                    "q3": float(mode_data.quantile(0.75)),
+                    "max": float(mode_data.max())
+                })
+                
+    # 2. Cost vs Sales (Scatter)
+    cost_vs_sales = []
+    if 'Sales' in df_filtered.columns and 'Shipping Cost' in df_filtered.columns:
+        scatter_cols = ['Sales', 'Shipping Cost']
+        if 'Order Priority' in df_filtered.columns:
+            scatter_cols.append('Order Priority')
+            
+        scatter_df = df_filtered[scatter_cols].dropna().sample(min(300, len(df_filtered)))
+        for _, row in scatter_df.iterrows():
+            cost_vs_sales.append({
+                "sales": float(row['Sales']),
+                "cost": float(row['Shipping Cost']),
+                "priority": str(row.get('Order Priority', 'Unknown'))
+            })
+            
+    # 3. Performance by Region
+    performance_by_region = []
+    if 'Region' in df_filtered.columns and 'Delivery Days' in df_filtered.columns and 'Shipping Cost' in df_filtered.columns:
+        region_perf = df_filtered.groupby('Region').agg(
+            Avg_Delivery_Days=('Delivery Days', 'mean'),
+            Avg_Shipping_Cost=('Shipping Cost', 'mean')
+        ).reset_index()
+        for _, row in region_perf.iterrows():
+            performance_by_region.append({
+                "region": str(row['Region']),
+                "avgDeliveryDays": float(row['Avg_Delivery_Days']),
+                "avgShippingCost": float(row['Avg_Shipping_Cost'])
+            })
+            
+    return {
+        "summary": {
+            "avgDeliveryDays": avg_delivery_days,
+            "totalShippingCost": total_shipping_cost,
+            "avgShippingCost": avg_shipping_cost,
+            "shippingCostRatio": shipping_cost_ratio
+        },
+        "deliveryByMode": delivery_by_mode,
+        "costVsSales": cost_vs_sales,
+        "performanceByRegion": performance_by_region
+    }
+
 # --- SERVE FRONTEND (Zero-Build Setup) ---
 # Ensure directories exist
 os.makedirs("templates", exist_ok=True)
