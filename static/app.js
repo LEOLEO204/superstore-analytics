@@ -401,12 +401,13 @@ const app = createApp({
                 repaint('margin', 'margin-chart-container', [
                     { name: 'Biên Lợi Nhuận (%)', data: performanceData.profitMargin.map(m => m.margin) }
                 ], {
-                    chart: { id: 'margin-chart', type: 'bar', toolbar: { show: false }, background: 'transparent' },
+                    chart: { id: 'margin-chart', type: 'bar', height: 450, toolbar: { show: false }, background: 'transparent' },
                     theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
                     colors: ['#10b981'],
-                    plotOptions: { bar: { horizontal: false, columnWidth: '50%', borderRadius: 4 } },
-                    xaxis: { categories: performanceData.profitMargin.map(m => m.region) },
-                    yaxis: { labels: { formatter: val => val.toFixed(1) + '%' } },
+                    plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
+                    dataLabels: { enabled: false },
+                    xaxis: { categories: performanceData.profitMargin.map(m => m.region), labels: { formatter: val => val.toFixed(1) + '%' } },
+                    tooltip: { y: { formatter: val => val.toFixed(2) + '%' } },
                     grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
                 });
 
@@ -414,12 +415,11 @@ const app = createApp({
                 repaint('subcat', 'subcat-chart-container', [
                     { name: 'Doanh Thu', data: performanceData.subCatSales.map(s => s.sales) }
                 ], {
-                    chart: { id: 'subcat-chart', type: 'bar', toolbar: { show: false }, background: 'transparent' },
+                    chart: { id: 'subcat-chart', type: 'bar', height: 450, toolbar: { show: false }, background: 'transparent' },
                     theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
                     colors: ['#a855f7'],
                     plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
-                    xaxis: { labels: { formatter: val => '$' + formatNumber(val, 0) } },
-                    yaxis: { categories: performanceData.subCatSales.map(s => s.subCategory) },
+                    xaxis: { categories: performanceData.subCatSales.map(s => s.subCategory), labels: { formatter: val => '$' + formatNumber(val, 0) } },
                     grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
                 });
 
@@ -427,12 +427,11 @@ const app = createApp({
                 repaint('geo', 'geo-chart-container', [
                     { name: 'Doanh Thu', data: performanceData.geoRevenue.map(g => g.sales) }
                 ], {
-                    chart: { id: 'geo-chart', type: 'bar', toolbar: { show: false }, background: 'transparent' },
+                    chart: { id: 'geo-chart', type: 'bar', height: 600, toolbar: { show: false }, background: 'transparent' },
                     theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
                     colors: ['#f59e0b'],
-                    plotOptions: { bar: { horizontal: false, columnWidth: '60%', borderRadius: 4 } },
-                    xaxis: { categories: performanceData.geoRevenue.map(g => `${g.market} - ${g.region}`) },
-                    yaxis: { labels: { formatter: val => '$' + formatNumber(val, 0) } },
+                    plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
+                    xaxis: { categories: performanceData.geoRevenue.map(g => `${g.market} - ${g.region}`), labels: { formatter: val => '$' + formatNumber(val, 0) } },
                     grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
                 });
             });

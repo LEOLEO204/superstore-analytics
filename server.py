@@ -160,18 +160,18 @@ async def get_performance_data(filters: FilterRequest):
             "subCatSales": []
         }
 
-    # 1. Pareto Data (Top 30 Customers by Sales)
+    # 1. Pareto Data (Top 15 Customers by Sales)
     pareto_df = df_filtered.groupby('Customer Name')['Sales'].sum().sort_values(ascending=False).reset_index()
     pareto_df['Cum_Sales'] = pareto_df['Sales'].cumsum()
     tot_sales = pareto_df['Sales'].sum()
     pareto_df['Cum_Percentage'] = (pareto_df['Cum_Sales'] / tot_sales * 100) if tot_sales > 0 else 0
     
-    top_30_pareto = pareto_df.head(30)
+    top_15_pareto = pareto_df.head(15)
     pareto_data = [{
         "customer": str(row['Customer Name']),
         "sales": float(row['Sales']),
         "cumPercent": float(row['Cum_Percentage'])
-    } for _, row in top_30_pareto.iterrows()]
+    } for _, row in top_15_pareto.iterrows()]
 
     # 2. Profit Margin by Region (%)
     margin_df = df_filtered.groupby('Region').agg(
