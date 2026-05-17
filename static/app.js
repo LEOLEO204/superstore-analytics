@@ -711,11 +711,12 @@ const app = createApp({
                     name: 'Ngày Giao Trung Bình',
                     data: shippingData.performanceByRegion.map(d => d.avgDeliveryDays)
                 }], {
-                    chart: { id: 'ship-region-days-chart', type: 'bar', height: 300, background: 'transparent', toolbar: {show: false} },
+                    chart: { id: 'ship-region-days-chart', type: 'bar', height: 600, background: 'transparent', toolbar: {show: false} },
                     theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
                     colors: ['#f59e0b'],
                     xaxis: { categories: shippingData.performanceByRegion.map(d => d.region) },
-                    plotOptions: { bar: { borderRadius: 4 } },
+                    plotOptions: { bar: { horizontal: true, borderRadius: 4, dataLabels: { position: 'top' } } },
+                    dataLabels: { enabled: true, formatter: val => formatNumber(val, 1) + ' ngày', offsetX: 30, style: { colors: [isDarkTheme.value ? '#e5e7eb' : '#374151'] } },
                     grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
                 });
             }
@@ -726,12 +727,12 @@ const app = createApp({
                     name: 'Chi Phí Trung Bình',
                     data: shippingData.performanceByRegion.map(d => d.avgShippingCost)
                 }], {
-                    chart: { id: 'ship-region-cost-chart', type: 'bar', height: 300, background: 'transparent', toolbar: {show: false} },
+                    chart: { id: 'ship-region-cost-chart', type: 'bar', height: 600, background: 'transparent', toolbar: {show: false} },
                     theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
                     colors: ['#0ea5e9'],
-                    xaxis: { categories: shippingData.performanceByRegion.map(d => d.region) },
-                    yaxis: { labels: { formatter: val => '$' + formatNumber(val, 0) } },
-                    plotOptions: { bar: { borderRadius: 4 } },
+                    xaxis: { categories: shippingData.performanceByRegion.map(d => d.region), labels: { formatter: val => '$' + formatNumber(val, 0) } },
+                    plotOptions: { bar: { horizontal: true, borderRadius: 4, dataLabels: { position: 'top' } } },
+                    dataLabels: { enabled: true, formatter: val => '$' + formatNumber(val, 2), offsetX: 30, style: { colors: [isDarkTheme.value ? '#e5e7eb' : '#374151'] } },
                     grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
                 });
             }
