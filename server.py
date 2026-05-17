@@ -3,7 +3,7 @@ import os
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -567,6 +567,174 @@ async def get_forecast_data(filters: FilterRequest):
             "growthRate": growth_rate,
             "startMonth": future_dates[0]
         }
+    }
+
+@app.post("/api/eda/analyze")
+async def analyze_data(file: UploadFile = File(...)):
+    content = await file.read()
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Dung lượng file quá lớn (tối đa 50MB)")
+    
+    import io
+    try:
+        try:
+            df = pd.read_csv(io.BytesIO(content), encoding='utf-8')
+        except UnicodeDecodeError:
+            df = pd.read_csv(io.BytesIO(content), encoding='latin-1')
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Không thể đọc file CSV: {str(e)}")
+    
+    if len(df) == 0:
+        raise HTTPException(status_code=400, detail="File CSV rỗng hoặc không có dữ liệu phù hợp")
+        
+    num_rows = int(df.shape[0])
+    num_cols = int(df.shape[1])
+    
+    # Data Health: Null values
+    missing_counts = df.isnull().sum()
+    missing_percent = (missing_counts / num_rows * 100).round(1)
+    
+    missing_info = []
+    for col in df.columns:
+        missing_info.append({
+            "column": col,
+            "missingCount": int(missing_counts[col]),
+            "missingPercent": float(missing_percent[col]),
+            "needOptimize": bool(missing_percent[col] > 50.0)
+        })
+        
+    # Duplicates
+    num_duplicates = int(df.duplicated().sum())
+    
+    # Categorical, Temporal, Numeric split
+    categorical_cols = []
+    temporal_cols = []
+    numeric_cols = []
+    
+    for col in df.columns:
+        col_type = str(df[col].dtype)
+        col_lower = col.lower()
+        
+        # Try temporal check
+        is_temp = False
+        if 'date' in col_lower or 'time' in col_lower:
+            try:
+                pd.to_datetime(df[col].dropna().head(10))
+                is_temp = True
+            except:
+                pass
+                
+        # Numeric check excluding ID, code, zip etc.
+        is_num = False
+        if ('int' in col_type or 'float' in col_type) and not any(k in col_lower for k in ['id', 'code', 'phone', 'zip', 'post', 'year']):
+            is_num = True
+            
+        if is_temp:
+            temporal_cols.append(col)
+        elif is_num:
+            numeric_cols.append(col)
+        else:
+            categorical_cols.append(col)
+            
+    # Text summary builder
+    min_date = "N/A"
+    max_date = "N/A"
+    if temporal_cols:
+        temp_col = temporal_cols[0]
+        try:
+            temp_dt = pd.to_datetime(df[temp_col], errors='coerce')
+            min_date = str(temp_dt.min().strftime('%Y-%m-%d')) if pd.notnull(temp_dt.min()) else "N/A"
+            max_date = str(temp_dt.max().strftime('%Y-%m-%d')) if pd.notnull(temp_dt.max()) else "N/A"
+        except:
+            pass
+            
+    summary_text = f"Bộ dữ liệu này chứa {num_rows:,} dòng và {num_cols} cột. Nó bao gồm các cột phân loại chính như {', '.join(categorical_cols[:4])}."
+    if temporal_cols and min_date != "N/A":
+        summary_text += f" Thời gian ghi nhận dữ liệu kéo dài từ ngày {min_date} đến ngày {max_date}."
+        
+    # Numeric stats
+    numeric_stats = []
+    for col in numeric_cols:
+        numeric_stats.append({
+            "column": col,
+            "min": float(df[col].min()) if pd.notnull(df[col].min()) else 0,
+            "max": float(df[col].max()) if pd.notnull(df[col].max()) else 0,
+            "avg": float(df[col].mean()) if pd.notnull(df[col].mean()) else 0
+        })
+        
+    # Auto-chart suggestion
+    suggested_charts = []
+    
+    # 1. Line: Temporal + Continuous
+    if temporal_cols and numeric_cols:
+        t_col = temporal_cols[0]
+        n_col = numeric_cols[0]
+        try:
+            temp_df = df.copy()
+            temp_df[t_col] = pd.to_datetime(temp_df[t_col], errors='coerce')
+            temp_df = temp_df.dropna(subset=[t_col])
+            
+            # Aggregate by Month or Year
+            num_m = temp_df[t_col].dt.to_period('M').nunique()
+            if 1 < num_m <= 36:
+                temp_df['period'] = temp_df[t_col].dt.to_period('M').astype(str)
+            else:
+                temp_df['period'] = temp_df[t_col].dt.year.astype(str)
+                
+            grouped = temp_df.groupby('period')[n_col].sum().reset_index()
+            grouped = grouped.sort_values('period')
+            
+            suggested_charts.append({
+                "type": "line",
+                "title": f"📈 Xu hướng {n_col} qua thời gian ({t_col})",
+                "seriesName": n_col,
+                "categories": grouped['period'].tolist(),
+                "data": [round(v, 2) for v in grouped[n_col].tolist()]
+            })
+        except:
+            pass
+            
+    # 2. Bar: Categorical + Continuous
+    if categorical_cols and numeric_cols:
+        best_cat = None
+        for col in categorical_cols:
+            card = df[col].nunique()
+            if 2 <= card <= 50:
+                best_cat = col
+                break
+        if not best_cat:
+            best_cat = categorical_cols[0]
+            
+        n_col = numeric_cols[0]
+        try:
+            grouped = df.groupby(best_cat)[n_col].sum().reset_index()
+            grouped = grouped.sort_values(n_col, ascending=False).head(10)
+            
+            suggested_charts.append({
+                "type": "bar",
+                "title": f"📊 Top 10 {best_cat} theo {n_col}",
+                "seriesName": n_col,
+                "categories": grouped[best_cat].tolist(),
+                "data": [round(v, 2) for v in grouped[n_col].tolist()]
+            })
+        except:
+            pass
+            
+    return {
+        "health": {
+            "numRows": num_rows,
+            "numCols": num_cols,
+            "numDuplicates": num_duplicates,
+            "missingInfo": missing_info
+        },
+        "insights": {
+            "summaryText": summary_text,
+            "numericStats": numeric_stats,
+            "categoricalCols": categorical_cols,
+            "temporalCols": temporal_cols,
+            "numericCols": numeric_cols
+        },
+        "charts": suggested_charts
     }
 
 # --- SERVE FRONTEND (Zero-Build Setup) ---

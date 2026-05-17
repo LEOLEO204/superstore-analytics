@@ -90,6 +90,12 @@
                         <i data-lucide="sparkles"></i>
                         <span>Dự Báo Tương Lai</span>
                     </a>
+                    <div class="menu-divider" style="margin: 15px 20px 10px; height: 1px; background: rgba(255,255,255,0.05);"></div>
+                    <div style="padding-left: 20px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px;">Công cụ mở rộng</div>
+                    <a href="#" :class="['nav-item', { active: currentTab === 'eda' }]" @click.prevent="currentTab = 'eda'">
+                        <i data-lucide="file-search"></i>
+                        <span>Khám Phá Dữ Liệu</span>
+                    </a>
                 </nav>
                 
                 <!-- Current User status -->
@@ -831,6 +837,165 @@
                         </div>
                     </div>
 
+                    <!-- 8. DATA EXPLORER (AUTO-EDA) TAB VIEW -->
+                    <div v-else-if="currentTab === 'eda'" class="dashboard-grid animate-fadeIn" style="display: flex; flex-direction: column; gap: 20px;">
+                        <!-- Upload Section -->
+                        <div class="chart-card full-width" style="padding: 30px; text-align: center; border: 2px dashed rgba(56, 189, 248, 0.3); background: rgba(30, 41, 59, 0.25); border-radius: 15px;">
+                            <div v-if="!edaData.isAnalyzing">
+                                <i data-lucide="file-search" style="width: 48px; height: 48px; color: #0ea5e9; margin-bottom: 15px; display: inline-block;"></i>
+                                <h3 style="margin-bottom: 10px; font-size: 1.25rem;">Tải Lên File CSV Phân Tích</h3>
+                                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">Hỗ trợ định dạng file CSV tối đa 50MB. Hệ thống sẽ tự động quét chất lượng dữ liệu và đề xuất trực quan hóa.</p>
+                                <label class="btn-primary" style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; justify-content: center; width: auto; max-width: 250px; margin: 0 auto;">
+                                    <i data-lucide="upload" style="width: 16px; height: 16px;"></i> Chọn file dữ liệu
+                                    <input type="file" accept=".csv" @change="uploadEdaFile" style="display: none;" />
+                                </label>
+                            </div>
+                            <div v-else style="padding: 20px 0;">
+                                <i data-lucide="loader-2" class="spin" style="width: 48px; height: 48px; color: #f59e0b; margin-bottom: 15px; display: inline-block;"></i>
+                                <h3 style="margin-bottom: 10px; font-size: 1.25rem;">Đang Quét Dữ Liệu...</h3>
+                                <p style="color: var(--text-muted); font-size: 0.9rem;">Hệ thống đang chạy quy trình kiểm tra sức khỏe dữ liệu, phân loại cột thông minh và tạo insight...</p>
+                            </div>
+                            <div v-if="edaData.errorMessage" style="color: var(--accent-danger); margin-top: 15px; font-weight: 600;">
+                                ⚠️ {{ edaData.errorMessage }}
+                            </div>
+                        </div>
+
+                        <!-- Analysis Results Section -->
+                        <div v-if="edaData.health" class="full-width" style="display: flex; flex-direction: column; gap: 20px;">
+                            <!-- Tabs Navigation inside EDA -->
+                            <div style="display: flex; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-top: 10px;">
+                                <button :class="['btn-secondary', { 'btn-primary': activeEdaTab === 'health' }]" @click="activeEdaTab = 'health'" style="padding: 8px 16px; font-size: 0.9rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.3s;">
+                                    📊 Sức Khỏe Dữ Liệu (Health)
+                                </button>
+                                <button :class="['btn-secondary', { 'btn-primary': activeEdaTab === 'insights' }]" @click="activeEdaTab = 'insights'" style="padding: 8px 16px; font-size: 0.9rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.3s;">
+                                    🧠 Tổng Quan Nội Dung (Insights)
+                                </button>
+                                <button :class="['btn-secondary', { 'btn-primary': activeEdaTab === 'charts' }]" @click="activeEdaTab = 'charts'" style="padding: 8px 16px; font-size: 0.9rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.3s;">
+                                    📈 Khám Phá Trực Quan (Charts)
+                                </button>
+                            </div>
+
+                            <!-- TAB 1: DATA HEALTH -->
+                            <div v-if="activeEdaTab === 'health'" class="animate-fadeIn" style="display: flex; flex-direction: column; gap: 20px;">
+                                <!-- Health KPI cards -->
+                                <div class="chart-row two-cols" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px;">
+                                    <div class="metric-card glass-card">
+                                        <div class="metric-title">📋 Tổng số dòng</div>
+                                        <div class="metric-value">{{ formatNumber(edaData.health.numRows, 0) }}</div>
+                                    </div>
+                                    <div class="metric-card glass-card">
+                                        <div class="metric-title">📊 Tổng số cột</div>
+                                        <div class="metric-value">{{ formatNumber(edaData.health.numCols, 0) }}</div>
+                                    </div>
+                                    <div :class="['metric-card', 'glass-card', { 'alert-red': edaData.health.numDuplicates > 0 }]">
+                                        <div class="metric-title">🗂 Dòng trùng lặp toàn bộ</div>
+                                        <div class="metric-value" :style="{ color: edaData.health.numDuplicates > 0 ? 'var(--accent-danger)' : 'var(--accent-success)' }">
+                                            {{ edaData.health.numDuplicates }}
+                                        </div>
+                                        <div v-if="edaData.health.numDuplicates > 0" style="color: var(--accent-danger); font-size: 0.75rem; font-weight: 600; margin-top: 5px;">
+                                            ⚠️ Cần loại bỏ dòng trùng!
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Missing values table -->
+                                <div class="chart-card">
+                                    <div class="chart-card-header">
+                                        <h3>⚠️ Thống Kê Ô Trống Dữ Liệu Theo Cột</h3>
+                                    </div>
+                                    <div class="table-responsive" style="margin-top: 15px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);">
+                                        <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                                            <thead style="background: rgba(30, 41, 59, 0.85); font-size: 0.85rem;">
+                                                <tr>
+                                                    <th style="padding: 12px 15px;">Tên Cột</th>
+                                                    <th style="padding: 12px 15px;">Số Ô Trống</th>
+                                                    <th style="padding: 12px 15px;">Tỷ Lệ Thiếu</th>
+                                                    <th style="padding: 12px 15px;">Trạng Thái</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody style="font-size: 0.9rem;">
+                                                <tr v-for="info in edaData.health.missingInfo" :key="info.column" style="border-bottom: 1px solid var(--border-color);">
+                                                    <td style="padding: 12px 15px; font-weight: 600;">{{ info.column }}</td>
+                                                    <td style="padding: 12px 15px;">{{ formatNumber(info.missingCount, 0) }}</td>
+                                                    <td style="padding: 12px 15px; width: 300px;">
+                                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                                            <div style="flex-grow: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.05); overflow: hidden;">
+                                                                <div :style="{ width: info.missingPercent + '%', background: info.missingPercent > 50 ? 'var(--accent-danger)' : 'var(--accent-success)', height: '100%' }"></div>
+                                                            </div>
+                                                            <span style="font-size: 0.85rem; font-weight: 600;">{{ info.missingPercent }}%</span>
+                                                        </div>
+                                                    </td>
+                                                    <td style="padding: 12px 15px;">
+                                                        <span v-if="info.needOptimize" class="status-badge" style="background: rgba(244, 63, 94, 0.15); color: var(--accent-danger); border: 1px solid var(--accent-danger); font-size: 0.75rem; padding: 4px 8px; border-radius: 12px; font-weight: 700;">
+                                                            Cần tối ưu
+                                                        </span>
+                                                        <span v-else class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-success); border: 1px solid var(--accent-success); font-size: 0.75rem; padding: 4px 8px; border-radius: 12px; font-weight: 700;">
+                                                            Tốt
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- TAB 2: DATA INSIGHTS -->
+                            <div v-if="activeEdaTab === 'insights'" class="animate-fadeIn" style="display: flex; flex-direction: column; gap: 20px;">
+                                <!-- Summary Text Card -->
+                                <div class="chart-card" style="padding: 20px; background: linear-gradient(135deg, rgba(14, 165, 233, 0.1) 0%, rgba(30, 41, 59, 0.4) 100%); border-left: 4px solid #0ea5e9;">
+                                    <h4 style="margin-bottom: 8px; color: #38bdf8; font-weight: 700; display: flex; align-items: center; gap: 6px;"><i data-lucide="info" style="width: 18px; height: 18px;"></i> TÓM TẮT DỮ LIỆU</h4>
+                                    <p style="font-size: 1rem; line-height: 1.6; font-weight: 500;">{{ edaData.insights.summaryText }}</p>
+                                </div>
+
+                                <!-- Numeric stats table -->
+                                <div class="chart-card" v-if="edaData.insights.numericStats.length > 0">
+                                    <div class="chart-card-header">
+                                        <h3>🔢 Thống Kê Số Học Thực Tế (Max, Min, Average)</h3>
+                                    </div>
+                                    <div class="table-responsive" style="margin-top: 15px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);">
+                                        <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                                            <thead style="background: rgba(30, 41, 59, 0.85); font-size: 0.85rem;">
+                                                <tr>
+                                                    <th style="padding: 12px 15px;">Cột Số Học</th>
+                                                    <th style="padding: 12px 15px;">Nhỏ Nhất (Min)</th>
+                                                    <th style="padding: 12px 15px;">Trung Bình (Average)</th>
+                                                    <th style="padding: 12px 15px;">Lớn Nhất (Max)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody style="font-size: 0.9rem;">
+                                                <tr v-for="stat in edaData.insights.numericStats" :key="stat.column" style="border-bottom: 1px solid var(--border-color);">
+                                                    <td style="padding: 12px 15px; font-weight: 600;">{{ stat.column }}</td>
+                                                    <td style="padding: 12px 15px;">{{ stat.min.toLocaleString() }}</td>
+                                                    <td style="padding: 12px 15px; color: #38bdf8; font-weight: 600;">{{ stat.avg.toLocaleString(undefined, {maximumFractionDigits: 2}) }}</td>
+                                                    <td style="padding: 12px 15px;">{{ stat.max.toLocaleString() }}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- TAB 3: AUTO-CHARTS -->
+                            <div v-if="activeEdaTab === 'charts'" class="animate-fadeIn" style="display: flex; flex-direction: column; gap: 20px;">
+                                <div v-if="edaData.charts.length === 0" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                                    <i data-lucide="bar-chart-2" style="width: 48px; height: 48px; margin-bottom: 10px; display: inline-block;"></i>
+                                    <p>Không có đủ thông tin tương thích (cột Ngày + cột Số hoặc cột Phân Loại + cột Số) để gợi ý vẽ biểu đồ tự động.</p>
+                                </div>
+                                <div v-else class="chart-row two-cols" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 20px;">
+                                    <div v-for="(chart, idx) in edaData.charts" :key="idx" class="chart-card">
+                                        <div class="chart-card-header">
+                                            <h3>{{ chart.title }}</h3>
+                                        </div>
+                                        <div class="chart-container">
+                                            <div :id="'eda-chart-' + idx}" style="min-height: 350px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Unified Dynamic Analytical Placeholder View for Other Tabs -->
                     <div v-else class="dashboard-grid-placeholder animate-fadeIn">
                         <div class="glass-card glow-border flex-center-column placeholder-content" style="background: var(--bg-card); backdrop-filter: var(--card-blur); border: 1px solid var(--border-color); border-radius: 20px; padding: 50px 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; max-width: 600px; margin: 50px auto; box-shadow: var(--shadow-glow);">
@@ -895,6 +1060,6 @@
     </div>
 
     <!-- Load custom App execution file -->
-    <script src="/static/app.js?v=4.4"></script>
+    <script src="/static/app.js?v=4.5"></script>
 </body>
 </html>

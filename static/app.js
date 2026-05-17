@@ -43,6 +43,16 @@ const app = createApp({
         });
         const selectedDrillRegion = ref('');
         const drillTransactions = ref([]);
+        
+        // --- AUTO-EDA TAB DATA ---
+        const edaData = reactive({
+            health: null,
+            insights: null,
+            charts: [],
+            isAnalyzing: false,
+            errorMessage: ''
+        });
+        const activeEdaTab = ref('health'); // 'health', 'insights', 'charts'
         const drillData = reactive({ sales: 0, profit: 0, count: 0 });
 
         // --- CUSTOMER PORTRAIT (RFM) DATA ---
@@ -1065,6 +1075,98 @@ const app = createApp({
             }
         };
 
+        // --- AUTO-EDA FUNCTIONS ---
+        const uploadEdaFile = async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (file.size > 50 * 1024 * 1024) {
+                edaData.errorMessage = 'Dung lượng file vượt quá giới hạn 50MB!';
+                return;
+            }
+            
+            edaData.isAnalyzing = true;
+            edaData.errorMessage = '';
+            edaData.health = null;
+            edaData.insights = null;
+            edaData.charts = [];
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/api/eda/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const errorJson = await response.json();
+                    throw new Error(errorJson.detail || 'Lỗi phân tích dữ liệu.');
+                }
+                
+                const data = await response.json();
+                edaData.health = data.health;
+                edaData.insights = data.insights;
+                edaData.charts = data.charts;
+                
+                activeEdaTab.value = 'health';
+                nextTick(() => {
+                    refreshIcons();
+                });
+            } catch (error) {
+                edaData.errorMessage = error.message || 'Lỗi kết nối máy chủ.';
+            } finally {
+                edaData.isAnalyzing = false;
+            }
+        };
+        
+        const renderEdaCharts = () => {
+            if (!edaData.charts || edaData.charts.length === 0) return;
+            
+            nextTick(() => {
+                edaData.charts.forEach((chartData, idx) => {
+                    const elId = `eda-chart-${idx}`;
+                    const el = document.getElementById(elId);
+                    if (!el) return;
+                    
+                    el.innerHTML = '';
+                    
+                    const options = {
+                        chart: {
+                            id: `eda-chart-id-${idx}`,
+                            type: chartData.type,
+                            height: 350,
+                            toolbar: { show: false },
+                            background: 'transparent'
+                        },
+                        theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
+                        series: [{
+                            name: chartData.seriesName,
+                            data: chartData.data
+                        }],
+                        xaxis: {
+                            categories: chartData.categories
+                        },
+                        colors: chartData.type === 'line' ? ['#0ea5e9'] : ['#a855f7'],
+                        grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+                    };
+                    
+                    const chart = new ApexCharts(el, options);
+                    chart.render();
+                });
+            });
+        };
+
+        watch(activeEdaTab, (newTab) => {
+            nextTick(() => {
+                refreshIcons();
+            });
+            if (newTab === 'charts') {
+                renderEdaCharts();
+            }
+        });
+
         // --- MOUNTED INITIALIZATION ---
         onMounted(() => {
             refreshIcons();
@@ -1121,7 +1223,9 @@ const app = createApp({
             // Recommendations Tab
             recommendationsData, selectedAnchor, filteredComboRecs, fetchRecommendationsData,
             // Forecast Tab
-            forecastData, fetchForecastData
+            forecastData, fetchForecastData,
+            // Auto-EDA Tab
+            edaData, activeEdaTab, uploadEdaFile
         };
     }
 });
