@@ -168,17 +168,42 @@ const app = createApp({
             dataLabels: { enabled: true, formatter: (val, opt) => `${val.toFixed(1)}%` }
         }));
 
-        // 3. Region Profit Bar Options
+        // 3. Region Profit Treemap Options
         const regionChartSeries = computed(() => [
-            { name: 'Lợi Nhuận', data: dashboardData.regionProfit.map(d => d.profit) }
+            {
+                data: dashboardData.regionProfit.map(d => ({
+                    x: d.region,
+                    y: d.profit
+                }))
+            }
         ]);
         const regionChartOptions = computed(() => ({
-            chart: { id: 'region-chart', type: 'bar', toolbar: { show: false }, background: 'transparent' },
+            chart: { id: 'region-chart', type: 'treemap', toolbar: { show: false }, background: 'transparent' },
             theme: { mode: isDarkTheme.value ? 'dark' : 'light' },
-            colors: ['#a855f7'],
-            plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '60%' } },
-            xaxis: { categories: dashboardData.regionProfit.map(d => d.region), labels: { formatter: val => '$' + formatNumber(val, 0) } },
-            grid: { borderColor: isDarkTheme.value ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+            plotOptions: {
+                treemap: {
+                    enableShades: true,
+                    colorScale: {
+                        ranges: [
+                            {
+                                from: -999999999,
+                                to: -0.001,
+                                color: '#ef4444' // Red for loss
+                            },
+                            {
+                                from: 0,
+                                to: 999999999,
+                                color: '#10b981' // Green for profit
+                            }
+                        ]
+                    }
+                }
+            },
+            tooltip: {
+                y: {
+                    formatter: val => '$' + formatNumber(val, 0)
+                }
+            }
         }));
 
         // 4. Market Sales Bar Options
@@ -317,7 +342,7 @@ const app = createApp({
 
                 // 3. Region Chart
                 repaint('region', 'region-chart-container', regionChartSeries.value, { 
-                    ...regionChartOptions.value, chart: { ...regionChartOptions.value.chart, height: 300 } 
+                    ...regionChartOptions.value, chart: { ...regionChartOptions.value.chart, height: 400 } 
                 });
 
                 // 4. Market Chart
